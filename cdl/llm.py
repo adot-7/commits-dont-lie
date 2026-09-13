@@ -270,7 +270,7 @@ def _validate_entities(payload: dict[str, Any]) -> Entities:
     return Entities(**values)
 
 
-def _supports_param(client: Any, name: str) -> bool:
+def _sdk_accepts(client: Any, name: str) -> bool:
     """Return True when the installed SDK's messages.create accepts ``name``."""
 
     try:
@@ -303,7 +303,7 @@ def _create_tool_call(
         "tools": [tool],
         "tool_choice": {"type": "tool", "name": tool["name"]},
     }
-    if _supports_param(client, "temperature"):
+    if _sdk_accepts(client, "temperature"):
         kwargs["temperature"] = temperature
     try:
         response = client.messages.create(**kwargs)
