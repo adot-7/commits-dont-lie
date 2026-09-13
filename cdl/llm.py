@@ -7,6 +7,7 @@ UNVERIFIABLE; that decision belongs only to ``grounding.check``.
 
 from __future__ import annotations
 
+import inspect
 import json
 import time
 from typing import Any, Callable
@@ -239,6 +240,16 @@ def _validate_entities(payload: dict[str, Any]) -> Entities:
     return Entities(**values)
 
 
+def _supports_param(client: Any, name: str) -> bool:
+    """Return True when the installed SDK's messages.create accepts ``name``."""
+
+    try:
+        params = inspect.signature(client.messages.create).parameters
+    except (TypeError, ValueError):
+        return False
+    return name in params
+
+
 def _create_tool_call(
     client: Any,
     *,
@@ -254,16 +265,18 @@ def _create_tool_call(
 
     started = time.perf_counter()
     response: Any | None = None
+    kwargs: dict[str, Any] = {
+        "model": settings.anthropic_model,
+        "max_tokens": 1024,
+        "system": system,
+        "messages": messages,
+        "tools": [tool],
+        "tool_choice": {"type": "tool", "name": tool["name"]},
+    }
+    if _supports_param(client, "temperature"):
+        kwargs["temperature"] = temperature
     try:
-        response = client.messages.create(
-            model=settings.anthropic_model,
-            max_tokens=1024,
-            temperature=temperature,
-            system=system,
-            messages=messages,
-            tools=[tool],
-            tool_choice={"type": "tool", "name": tool["name"]},
-        )
+        response = client.messages.create(**kwargs)
     except Exception as exc:
         elapsed_ms = int((time.perf_counter() - started) * 1000)
         _log_call(store, operation=operation, model=settings.anthropic_model, response=None, elapsed_ms=elapsed_ms, error=str(exc))
