@@ -43,8 +43,14 @@ def main(argv: list[str] | None = None) -> int:
         import uvicorn
 
         from .config import load_settings
+        from .notion_client import NotionClient
 
         settings = load_settings(strict=True)
+        notion = NotionClient(settings=settings)
+        try:
+            notion.assert_schema()
+        finally:
+            notion.close()
         uvicorn.run("cdl.app:app", host="127.0.0.1", port=8000, workers=1)
         return 0
     if args.command == "dump-compare":
@@ -55,6 +61,17 @@ def main(argv: list[str] | None = None) -> int:
         client = GitHubClient(settings=load_settings(strict=True))
         try:
             print(json.dumps(dataclass_dict(client.compare(args.base, args.head)), indent=2))
+        finally:
+            client.close()
+        return 0
+    if args.command == "resolve-notion-ids":
+        from .config import load_settings
+        from .notion_client import NotionClient
+
+        client = NotionClient(settings=load_settings(strict=True))
+        try:
+            for name, value in client.resolve_data_source_ids().items():
+                print(f"{name}={value}")
         finally:
             client.close()
         return 0
