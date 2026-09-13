@@ -1,9 +1,11 @@
 # Commits Don't Lie
 
+*Shakira knows hips don't lie. We checked — neither do commits.*
+
 > Every build-in-public tool drafts a post that sounds like you. None of them check whether
 > it's true. Ours does — and it keeps checking after you hit send.
 
-**Live:** https://commitsdontlie.akashparashar.dev · **Demo video:** _link below (§05)_ ·
+**▶ Demo (2 min):** https://youtu.be/zolODgOZ-uM · **Live:** https://commitsdontlie.akashparashar.dev ·
 **Reliability brief:** [`BRIEF.md`](BRIEF.md)
 
 Built solo in one night at the Multi-App AI Agent Hackathon (Lemma × Comma Capital, 13 Sep 2026).
@@ -129,7 +131,7 @@ why and leave the note `Ready`; passing drafts arrive in Slack with receipts. Ap
 
 ## 05 · Demo video
 
-**▶ [DEMO VIDEO — link goes here]** (2:00)
+**▶ https://youtu.be/zolODgOZ-uM** (2:00)
 
 What it shows, in order: a real note over-claims → the gate blocks the sentence and names it →
 the fixed draft passes with file:line receipts → Approve re-checks HEAD and hands off to X →
