@@ -26,7 +26,7 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _payload_fields(payload: dict[str, Any]) -> dict[str, str]:
+def _payload_fields(payload: dict[str, Any]) -> dict[str, Any]:
     """Extract and validate the fields required by Slack interactivity."""
 
     action = (payload.get("actions") or [{}])[0] or {}
@@ -44,6 +44,8 @@ def _payload_fields(payload: dict[str, Any]) -> dict[str, str]:
     missing = [key for key, value in fields.items() if not value]
     if missing:
         raise ValueError("Slack interaction missing " + ", ".join(missing))
+    message_blocks = message.get("blocks")
+    fields["message_blocks"] = message_blocks if isinstance(message_blocks, list) and message_blocks else None
     return fields
 
 
@@ -129,6 +131,8 @@ async def handle_interaction(
                 fields["message_ts"],
                 f"❌ Rejected by @{fields['username']}",
                 channel=fields["channel_id"],
+                blocks=fields["message_blocks"],
+                post=post,
             )
         except Exception as exc:
             _mark_error(active_store, post_id, "slack", str(exc))
@@ -161,8 +165,10 @@ async def handle_interaction(
         try:
             active_slack.update_message(
                 fields["message_ts"],
-                f"⚠️ Not sent: evidence changed since draft — {stale.reason}",
+                f"⚠️ Not sent: evidence changed — {stale.reason}",
                 channel=fields["channel_id"],
+                blocks=fields["message_blocks"],
+                post=post,
             )
         except Exception as exc:
             _mark_error(active_store, post_id, "slack", str(exc))
@@ -177,6 +183,8 @@ async def handle_interaction(
             fields["message_ts"],
             f"✅ Approved by @{fields['username']} — copy & post",
             channel=fields["channel_id"],
+            blocks=fields["message_blocks"],
+            post=post,
         )
     except Exception as exc:
         _mark_error(active_store, post_id, "slack", str(exc))

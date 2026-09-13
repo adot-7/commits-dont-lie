@@ -8,6 +8,7 @@ from pathlib import Path
 from cdl.approval import handle_interaction
 from cdl.config import Settings
 from cdl.models import Claim, DiffContext, Entities, Evidence, FileChange, Sentence, Verdict
+from cdl.slack_client import SlackClient
 from cdl.store import Store
 
 
@@ -60,13 +61,31 @@ class FakeSlack:
         self.updates.append((args, kwargs))
 
 
-def payload(action_id: str, post_id: int, action_ts: str) -> dict:
+class FakeSlackAPI:
+    """Record Slack Web API calls for end-to-end block update tests."""
+
+    def __init__(self):
+        self.calls = []
+
+    def chat_postMessage(self, **kwargs):
+        self.calls.append(("chat_postMessage", kwargs))
+        return {"ok": True, "ts": "123.1"}
+
+    def chat_update(self, **kwargs):
+        self.calls.append(("chat_update", kwargs))
+        return {"ok": True}
+
+
+def payload(action_id: str, post_id: int, action_ts: str, *, blocks=None) -> dict:
     """Build the fields supplied by a Slack button interaction."""
 
+    message = {"ts": "123.1"}
+    if blocks is not None:
+        message["blocks"] = blocks
     return {
         "actions": [{"action_id": action_id, "value": str(post_id), "action_ts": action_ts}],
         "user": {"username": "akash"},
-        "message": {"ts": "123.1"},
+        "message": message,
         "channel": {"id": "C123"},
     }
 
@@ -101,6 +120,35 @@ def test_approve_runs_midcheck_and_marks_sent(tmp_path):
     assert notion.post_statuses[-1][1] == {"status": "Sent"}
 
 
+def test_approve_update_preserves_post_text_and_evidence_blocks(tmp_path):
+    """An approval keeps the original copyable post and receipt context."""
+
+    store = Store(tmp_path / "db.sqlite")
+    post_id = create_draft(store)
+    api = FakeSlackAPI()
+    slack = SlackClient(settings(tmp_path), store=store, web_client=api)
+    post = store.get_post(post_id)
+    slack.post_draft(post_id, post["text"], ['✅ "I updated handle_push." → cdl/app.py:10 (handle_push)'])
+    original_blocks = api.calls[0][1]["blocks"]
+    github = FakeGitHub(DiffContext("repo", "b" * 40, "c" * 40, files=[FileChange("cdl/app.py", "modified", added=[(11, "# unrelated")])]))
+    asyncio.run(
+        handle_interaction(
+            payload("approve", post_id, "a4", blocks=original_blocks),
+            store=store,
+            settings=settings(tmp_path),
+            github=github,
+            notion=FakeNotion(),
+            slack=slack,
+        )
+    )
+    updated = api.calls[1][1]["blocks"]
+    assert updated[0]["text"]["text"] == post["text"]
+    assert "handle_push" in updated[1]["elements"][0]["text"]
+    assert updated[2]["type"] == "context"
+    assert updated[2]["elements"][0]["text"] == "✅ Approved by @akash — copy & post"
+    assert all(block["type"] != "actions" for block in updated)
+
+
 def test_approve_after_receipt_removal_becomes_stale(tmp_path):
     """A deleted cited symbol is caught before the approval sends it."""
 
@@ -111,7 +159,7 @@ def test_approve_after_receipt_removal_becomes_stale(tmp_path):
     slack = FakeSlack()
     asyncio.run(handle_interaction(payload("approve", post_id, "a2"), store=store, settings=settings(tmp_path), github=github, notion=notion, slack=slack))
     assert store.get_post(post_id)["status"] == "Stale"
-    assert "Not sent: evidence changed" in slack.updates[0][0][1]
+    assert "Not sent: evidence changed —" in slack.updates[0][0][1]
     assert notion.post_statuses[-1][1] == {"status": "Stale"}
 
 

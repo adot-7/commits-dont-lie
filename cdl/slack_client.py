@@ -76,6 +76,52 @@ class SlackClient:
         text = "\n".join(evidence_lines) or "No evidence receipts"
         return {"type": "context", "elements": [{"type": "mrkdwn", "text": text}]}
 
+    def _evidence_lines_from_post(self, post: dict[str, Any]) -> list[str]:
+        """Rebuild stored sentence receipts when Slack omits message blocks."""
+
+        markers = {"SUPPORTED": "✅", "UNSUPPORTED": "⛔", "UNVERIFIABLE": "❔"}
+        lines: list[str] = []
+        for sentence in post.get("sentences", []):
+            status = str(sentence.get("status", ""))
+            if status == "UNVERIFIABLE":
+                suffix = "no checkable claim"
+            else:
+                receipts = []
+                for receipt in sentence.get("evidence", []):
+                    location = str(receipt.get("path", ""))
+                    if receipt.get("line_no") is not None:
+                        location += f":{receipt['line_no']}"
+                    receipts.append(f"{location} ({receipt.get('entity', '')})")
+                suffix = ", ".join(receipts) if receipts else str(sentence.get("reason", ""))
+            marker = markers.get(status, "❔")
+            lines.append(f'{marker} "{sentence.get("text", "")}" → {suffix}')
+        return lines
+
+    def _post_blocks(self, post: dict[str, Any]) -> list[dict[str, Any]]:
+        """Rebuild the original text and evidence blocks from a stored post."""
+
+        return [
+            {"type": "section", "text": {"type": "mrkdwn", "text": str(post.get("text", ""))}},
+            self._evidence_context(self._evidence_lines_from_post(post)),
+        ]
+
+    def _replace_actions(self, blocks: list[dict[str, Any]], text: str) -> list[dict[str, Any]]:
+        """Replace actions in original blocks while preserving every other block."""
+
+        context = {"type": "context", "elements": [{"type": "mrkdwn", "text": text}]}
+        updated: list[dict[str, Any]] = []
+        replaced = False
+        for block in blocks:
+            if block.get("type") == "actions":
+                if not replaced:
+                    updated.append(context)
+                    replaced = True
+                continue
+            updated.append(block)
+        if not replaced:
+            updated.append(context)
+        return updated
+
     def post_draft(self, post_id: int, text: str, evidence_lines: list[str]) -> str:
         """Post a draft with receipt context and Approve/Reject buttons."""
 
@@ -123,15 +169,28 @@ class SlackClient:
         self.store.append_event("slack.posted", {"post_id": post_id, "kind": "blocked", "ts": ts}, post_id=post_id)
         return ts
 
-    def update_message(self, ts: str, text: str, blocks: list[dict[str, Any]] | None = None, *, channel: str | None = None) -> None:
-        """Update a draft message, normally removing its action buttons."""
+    def update_message(
+        self,
+        ts: str,
+        text: str,
+        blocks: list[dict[str, Any]] | None = None,
+        *,
+        channel: str | None = None,
+        post: dict[str, Any] | None = None,
+    ) -> None:
+        """Update terminal status while preserving the draft text and receipts."""
 
+        original = blocks
+        if original is None and post is not None:
+            original = self._post_blocks(post)
+        if original is None:
+            original = [{"type": "section", "text": {"type": "mrkdwn", "text": text}}]
         self._call(
             "chat_update",
             channel=channel or self.settings.slack_channel_id,
             ts=ts,
             text=text,
-            blocks=blocks or [{"type": "section", "text": {"type": "mrkdwn", "text": text}}],
+            blocks=self._replace_actions(original, text),
         )
 
     def post_thread_reply(self, thread_ts: str, text: str, *, channel: str | None = None) -> str:
