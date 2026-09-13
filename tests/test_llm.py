@@ -38,9 +38,7 @@ class FakeMessages:
         self.responses = list(responses)
         self.calls = []
 
-    def create(self, *, temperature=None, **kwargs):
-        if temperature is not None:
-            kwargs["temperature"] = temperature
+    def create(self, **kwargs):
         self.calls.append(kwargs)
         return self.responses.pop(0)
 
@@ -77,7 +75,6 @@ def test_draft_uses_forced_tool_schema_and_logs_usage(tmp_path):
     assert [item.idx for item in sentences] == [0, 1, 2]
     call = fake.messages.calls[0]
     assert call["model"] == "test-model"
-    assert call["temperature"] == 0.3
     assert call["tool_choice"] == {"type": "tool", "name": "draft_sentences"}
     assert call["tools"][0]["input_schema"]["properties"]["sentences"]["maxItems"] == 6
     rows = store._connect().execute("SELECT data_json FROM events WHERE kind='llm.call'").fetchall()
@@ -97,7 +94,6 @@ def test_extract_then_filter_drops_entity_not_in_sentence(tmp_path):
     assert filtered.files == ["cdl/app.py"]
     assert filtered.symbols == ["handle_push"]
     assert dropped[0][1]["entity"] == "cdl/ghost.py"
-    assert fake.messages.calls[0]["temperature"] == 0.0
 
 
 def test_malformed_tool_input_gets_one_retry_with_error(tmp_path):

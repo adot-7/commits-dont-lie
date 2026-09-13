@@ -362,6 +362,11 @@ def extract_entities(
     paths = changed_paths or []
     system = (
         f"{RULE}\nExtract only concrete files, symbols, and integrations named literally in the sentence. "
+        "Symbols must be code identifiers: they contain an underscore, a dot, parentheses, or CamelCase, "
+        "or exactly equal a path segment from the changed paths. Plain lowercase English words such as "
+        "github, webhook, or server are never symbols; return them as integrations only when they name "
+        "one of the allowed products, otherwise omit them. Integrations must be single product names: "
+        "GitHub, Slack, Notion, Anthropic, SQLite, FastAPI, or Caddy. "
         "The changed paths are hints for spelling only; do not add an entity that is not in the sentence."
     )
     messages = [
