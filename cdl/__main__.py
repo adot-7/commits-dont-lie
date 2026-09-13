@@ -23,7 +23,11 @@ def build_parser() -> argparse.ArgumentParser:
     draft.add_argument("--head", help="head SHA to draft against")
     replay = subparsers.add_parser("replay", help="re-run a stored push")
     replay.add_argument("push_id", type=int)
-    subparsers.add_parser("eval", help="run the hand-labelled evaluation")
+    eval_parser = subparsers.add_parser("eval", help="run the hand-labelled evaluation")
+    eval_parser.add_argument("--cases", default="eval/cases.jsonl")
+    eval_parser.add_argument("--cache-dir", default="eval/cache")
+    eval_parser.add_argument("--report-json", default="eval/report.json")
+    eval_parser.add_argument("--report-md", default="eval/report.md")
     subparsers.add_parser("resolve-notion-ids", help="resolve Notion database data-source IDs")
     subparsers.add_parser("models", help="list available Anthropic model IDs")
     compare = subparsers.add_parser("dump-compare", help="dump a GitHub compare response as JSON")
@@ -108,6 +112,15 @@ def main(argv: list[str] | None = None) -> int:
         store = Store(settings.database_path)
         asyncio.run(handle_push(args.push_id, settings=settings, store=store))
         return 0
+    if args.command == "eval":
+        from .eval.run_eval import main as eval_main
+
+        return eval_main([
+            "--cases", args.cases,
+            "--cache-dir", args.cache_dir,
+            "--report-json", args.report_json,
+            "--report-md", args.report_md,
+        ])
     # Later milestones replace these placeholders with service dispatch.
     if args.command in {"draft-now", "replay", "eval", "resolve-notion-ids", "models", "dump-compare", "resync"}:
         print(f"{args.command}: not implemented yet")
