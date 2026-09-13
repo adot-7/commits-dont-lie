@@ -9,6 +9,7 @@ Every file, function, or integration a sentence names must appear in the diff â€
 # Where the LLM is and isn't
 
 Anthropic drafts 3â€“6 first-person sentences and extracts files, symbols, and integrations through forced `tool_use` JSON schemas. It never decides a verdict. The substring guard removes any extracted entity not literally present in the sentence (files may also match by basename) and logs each drop. `ANTHROPIC_MODEL` controls the model, and each call records model, input/output tokens, duration, and failures in SQLite/stdout. The matcher is pure Python and has zero network or LLM imports.
+The anthropic 1.5.0 SDK removed the `temperature` parameter from `messages.create`; the client feature-detects it and otherwise runs at the SDK default.
 
 # Failure handling
 
