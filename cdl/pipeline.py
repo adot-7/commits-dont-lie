@@ -53,7 +53,6 @@ async def handle_push(
             diff,
             store=active_store,
             settings=active_settings,
-            github=active_github,
             notion=active_notion,
             slack=active_slack,
         )
