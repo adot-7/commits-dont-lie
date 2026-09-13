@@ -335,6 +335,16 @@ class Store:
         finally:
             connection.close()
 
+    def get_superseding_post(self, correction_id: int) -> dict[str, Any] | None:
+        """Return the original post linked to a correction row, if present."""
+
+        connection = self._connect()
+        try:
+            row = connection.execute("SELECT id FROM posts WHERE superseded_by=? LIMIT 1", (correction_id,)).fetchone()
+        finally:
+            connection.close()
+        return self.get_post(int(row["id"])) if row else None
+
     def list_posts(self, *, status: str | None = None) -> list[dict[str, Any]]:
         """Return dashboard post summaries newest-first."""
 

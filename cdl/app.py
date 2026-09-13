@@ -7,11 +7,15 @@ responsibilities stay in the service modules called by background tasks.
 
 from fastapi import FastAPI
 from fastapi import BackgroundTasks, Request
+from fastapi import HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 import hashlib
 import hmac
 import json
 import subprocess
+from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs
 
@@ -114,6 +118,8 @@ def create_app(
     active_push_handler = push_handler or handle_push
     active_draft_handler = draft_handler or _draft_now_background
     application = FastAPI(title="Commits Don't Lie")
+    templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+    application.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
     application.state.settings = active_settings
     application.state.store = active_store
 
@@ -124,11 +130,53 @@ def create_app(
         return {"ok": True, "sha": _git_sha(active_settings)}
 
     @application.get("/", response_class=HTMLResponse)
-    async def home() -> str:
-        """Render the M0 placeholder page."""
+    async def home(request: Request) -> Response:
+        """Render the SQLite-backed post table and production counters."""
 
-        return """<!doctype html><html><head><title>Commits Don't Lie</title></head>
-        <body><h1>Commits Don't Lie — booting</h1></body></html>"""
+        return templates.TemplateResponse(
+            request=request,
+            name="index.html",
+            context={
+                "settings": active_settings,
+                "counts": active_store.counts(),
+                "posts": active_store.list_posts(),
+                "rule": "Every file, function, or integration a sentence names must appear in the diff — or the sentence doesn't ship.",
+            },
+        )
+
+    @application.get("/posts/{post_id}", response_class=HTMLResponse)
+    async def post_detail(request: Request, post_id: int) -> Response:
+        """Render one post, its verdicts, receipts, and stale/correction links."""
+
+        post = active_store.get_post(post_id)
+        if post is None:
+            raise HTTPException(status_code=404, detail="post not found")
+        for sentence in post["sentences"]:
+            for receipt in sentence["evidence"]:
+                url = f"https://github.com/{active_settings.github_repo}/blob/{post['head_sha']}/{receipt['path']}"
+                if receipt.get("line_no") is not None:
+                    url += f"#L{receipt['line_no']}"
+                receipt["github_url"] = url
+        original = active_store.get_superseding_post(post_id) if post["status"] == "Correction" else None
+        correction = active_store.get_post(post["superseded_by"]) if post.get("superseded_by") else None
+        return templates.TemplateResponse(
+            request=request,
+            name="post.html",
+            context={"settings": active_settings, "post": post, "original": original, "correction": correction},
+        )
+
+    @application.get("/eval", response_class=HTMLResponse)
+    async def eval_page(request: Request) -> Response:
+        """Render the committed evaluation report when one exists."""
+
+        report_path = Path("eval/report.json")
+        report = None
+        if report_path.exists():
+            try:
+                report = json.loads(report_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                report = {"error": "report.json could not be read"}
+        return templates.TemplateResponse(request=request, name="eval.html", context={"report": report})
 
     @application.post("/webhook/github")
     async def github_webhook(request: Request, background_tasks: BackgroundTasks) -> Response:

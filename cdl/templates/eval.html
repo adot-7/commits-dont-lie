@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Evaluation · Commits Don't Lie{% endblock %}
+{% block content %}
+<p class="back"><a href="/">← dashboard</a></p>
+<section class="hero"><p class="eyebrow">RELIABILITY</p><h1>Evaluation report</h1><p class="lede">The matcher is deterministic; this report separates extraction from grounding.</p></section>
+{% if not report %}<section class="panel"><p class="empty">No report yet. Run <span class="mono">make eval</span>.</p></section>
+{% elif report.error %}<section class="alert alert-error">{{ report.error }}</section>
+{% else %}
+<section class="counter-grid">
+  <div class="counter"><span>Accuracy</span><strong>{{ report.accuracy }}</strong></div>
+  <div class="counter"><span>Cases</span><strong>{{ report.total }}</strong></div>
+  <div class="counter"><span>Correct</span><strong>{{ report.correct }}</strong></div>
+</section>
+<section class="panel"><div class="panel-heading"><h2>Confusion matrix</h2><span>expected × got</span></div>
+{% if report.confusion_matrix %}<div class="table-wrap"><table><thead><tr><th>Expected / got</th>{% for label in report.labels %}<th>{{ label }}</th>{% endfor %}</tr></thead><tbody>{% for label in report.labels %}<tr><th>{{ label }}</th>{% for got in report.labels %}<td>{{ report.confusion_matrix[label][got] }}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div>{% endif %}</section>
+<section class="panel"><div class="panel-heading"><h2>Per-class precision / recall</h2></div><div class="table-wrap"><table><thead><tr><th>Class</th><th>Precision</th><th>Recall</th></tr></thead><tbody>{% for label, metrics in report.per_class.items() %}<tr><td>{{ label }}</td><td>{{ metrics.precision }}</td><td>{{ metrics.recall }}</td></tr>{% endfor %}</tbody></table></div></section>
+{% if report.misses %}<section class="panel"><div class="panel-heading"><h2>Misses</h2><span>{{ report.misses|length }}</span></div>{% for miss in report.misses %}<p class="miss"><span class="mono">{{ miss.id }}</span> expected {{ miss.expected }}, got {{ miss.got }} — {{ miss.reason }}</p>{% endfor %}</section>{% endif %}
+{% endif %}
+{% endblock %}

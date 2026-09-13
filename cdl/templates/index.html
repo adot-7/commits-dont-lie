@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · Commits Don't Lie{% endblock %}
+{% block content %}
+<section class="hero">
+  <p class="eyebrow">LIVE AUDIT LOG</p>
+  <h1>Build updates with receipts.</h1>
+  <p class="lede">Every sentence is checked against the GitHub diff before it reaches Slack.</p>
+</section>
+<section class="counter-grid" aria-label="Production counters">
+  <div class="counter"><span>Pushes</span><strong>{{ counts.pushes }}</strong></div>
+  <div class="counter"><span>Sent</span><strong>{{ counts.posts_by_status.get('Sent', 0) }}</strong></div>
+  <div class="counter"><span>Draft / blocked</span><strong>{{ counts.posts_by_status.get('Draft', 0) }} / {{ counts.posts_by_status.get('Blocked', 0) }}</strong></div>
+  <div class="counter"><span>Stale</span><strong>{{ counts.posts_by_status.get('Stale', 0) }}</strong></div>
+  <div class="counter"><span>LLM tokens</span><strong>{{ counts.llm_input_tokens + counts.llm_output_tokens }}</strong></div>
+  <div class="counter"><span>Dropped entities</span><strong>{{ counts.entity_dropped }}</strong></div>
+</section>
+<section class="panel">
+  <div class="panel-heading"><h2>Posts</h2><span>{{ posts|length }} total</span></div>
+  {% if posts %}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Status</th><th>Sentence</th><th>Commit range</th><th>Created</th><th>Signals</th></tr></thead>
+    <tbody>
+    {% for post in posts %}
+      <tr>
+        <td><a class="status status-{{ post.status|lower }}" href="/posts/{{ post.id }}">{{ post.status }}</a></td>
+        <td><a class="post-title" href="/posts/{{ post.id }}">{{ post.first_sentence or 'Untitled post' }}</a></td>
+        <td><a class="mono" href="https://github.com/{{ settings.github_repo }}/compare/{{ post.base_sha }}...{{ post.head_sha }}">{{ post.base_sha[:7] }}..{{ post.head_sha[:7] }}</a></td>
+        <td class="muted">{{ post.created_at }}</td>
+        <td>{% if post.slack_ts %}<span title="Slack message exists">Slack ✓</span>{% endif %}{% if post.sent_at %}<br><span class="muted">sent {{ post.sent_at }}</span>{% endif %}{% if post.stale_at %}<br><span class="muted">stale {{ post.stale_at }}</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}<p class="empty">No posts yet. A Ready Notion note and a push will create the first receipt.</p>{% endif %}
+</section>
+<section class="panel compact">
+  <div class="panel-heading"><h2>Verdicts</h2><span>deterministic matcher</span></div>
+  <div class="verdict-row"><span class="status status-supported">SUPPORTED</span><strong>{{ counts.sentences_by_verdict.get('SUPPORTED', 0) }}</strong><span class="status status-unsupported">UNSUPPORTED</span><strong>{{ counts.sentences_by_verdict.get('UNSUPPORTED', 0) }}</strong><span class="status status-unverifiable">UNVERIFIABLE</span><strong>{{ counts.sentences_by_verdict.get('UNVERIFIABLE', 0) }}</strong></div>
+  <p class="muted">Estimated LLM cost: ${{ "%.4f"|format(counts.llm_estimated_cost) }} · <a href="/eval">Open evaluation report</a></p>
+</section>
+{% endblock %}

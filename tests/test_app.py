@@ -119,7 +119,7 @@ def test_health_and_placeholder(tmp_path):
     health = asyncio.run(request(application, "GET", "/healthz"))
     home = asyncio.run(request(application, "GET", "/"))
     assert health.json()["ok"] is True
-    assert "booting" in home.text
+    assert "Build updates with receipts" in home.text
 
 
 def test_slack_interaction_acknowledges_valid_signature(tmp_path):

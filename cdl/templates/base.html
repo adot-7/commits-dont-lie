@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="5">
+  <title>{% block title %}Commits Don't Lie{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+</head>
+<body>
+  <header class="site-header">
+    <div><a class="brand" href="/">Commits Don't Lie</a><span class="tagline">provenance you can point to</span></div>
+    <nav><a href="/">Posts</a><a href="/eval">Eval</a></nav>
+  </header>
+  <main class="shell">
+    {% block content %}{% endblock %}
+  </main>
+  <footer><p>Every file, function, or integration a sentence names must appear in the diff — or the sentence doesn't ship.</p></footer>
+</body>
+</html>

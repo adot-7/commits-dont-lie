@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Post #{{ post.id }} · Commits Don't Lie{% endblock %}
+{% block content %}
+<p class="back"><a href="/">← all posts</a></p>
+{% if post.status == 'Stale' %}<div class="alert alert-warn"><strong>⚠️ Stale.</strong> Evidence changed after this post was sent.{% if correction %} <a href="/posts/{{ correction.id }}">View correction #{{ correction.id }}</a>.{% endif %}</div>{% endif %}
+{% if post.status == 'Correction' %}<div class="alert"><strong>Correction.</strong>{% if original %} This supersedes <a href="/posts/{{ original.id }}">post #{{ original.id }}</a>.{% endif %}</div>{% endif %}
+<section class="post-head">
+  <div><span class="status status-{{ post.status|lower }}">{{ post.status }}</span><p class="eyebrow">POST #{{ post.id }} · {{ post.created_at }}</p><h1>{{ post.text.split('\n')[0] if post.text else 'Untitled post' }}</h1></div>
+  <div class="range"><span>Commit range</span><a class="mono" href="https://github.com/{{ settings.github_repo }}/compare/{{ post.base_sha }}...{{ post.head_sha }}">{{ post.base_sha[:7] }}..{{ post.head_sha[:7] }}</a></div>
+</section>
+<section class="panel post-copy"><h2>Post text</h2><p>{{ post.text }}</p></section>
+<section class="panel"><div class="panel-heading"><h2>Sentence receipts</h2><span>{{ post.sentences|length }} sentences</span></div>
+{% for sentence in post.sentences %}
+  <article class="sentence">
+    <div class="sentence-top"><span class="status status-{{ sentence.status|lower }}">{{ sentence.status }}</span><span class="source">{{ sentence.source }}</span></div>
+    <p class="sentence-text">{{ sentence.text }}</p>
+    <p class="reason">{{ sentence.reason }}</p>
+    {% if sentence.evidence %}<ul class="evidence">{% for item in sentence.evidence %}<li><a class="mono" href="{{ item.github_url }}">{{ item.path }}{% if item.line_no is not none %}:{{ item.line_no }}{% endif %}</a> <span>({{ item.entity }}){% if item.line_text %} — {{ item.line_text }}{% endif %}</span></li>{% endfor %}</ul>{% endif %}
+  </article>
+{% else %}<p class="empty">No sentence receipts stored.</p>{% endfor %}
+</section>
+{% if post.error %}<section class="alert alert-error"><strong>Error:</strong> {{ post.error }}</section>{% endif %}
+{% endblock %}
