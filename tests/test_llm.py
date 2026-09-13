@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -80,6 +81,29 @@ def test_draft_uses_forced_tool_schema_and_logs_usage(tmp_path):
     rows = store._connect().execute("SELECT data_json FROM events WHERE kind='llm.call'").fetchall()
     assert len(rows) == 1
     assert '"input_tokens": 11' in rows[0][0]
+
+
+def test_draft_appends_file_voice_examples(tmp_path):
+    """Drafting includes an optional author-post file under the voice label."""
+
+    examples = tmp_path / "examples.md"
+    examples.write_text("I kept poking at the weird failure until it gave up.", encoding="utf-8")
+    fake = FakeClient([response({"sentences": [
+        {"text": "I changed cdl/app.py.", "source": "commits"},
+        {"text": "I fixed the weird failure.", "source": "both"},
+        {"text": "I kept the receipts.", "source": "notes"},
+    ]})])
+    draft(
+        "Tonight",
+        "Something broke and it cost me an hour.",
+        diff(),
+        anthropic_client=fake,
+        store=Store(tmp_path / "db.sqlite"),
+        settings=replace(settings(tmp_path), style_examples_file=str(examples)),
+    )
+    system = fake.messages.calls[0]["system"]
+    assert "Author's own past posts — match this voice:" in system
+    assert "I kept poking at the weird failure until it gave up." in system
 
 
 def test_extract_then_filter_drops_entity_not_in_sentence(tmp_path):

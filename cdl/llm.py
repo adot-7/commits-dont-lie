@@ -10,6 +10,7 @@ from __future__ import annotations
 import inspect
 import json
 import time
+from pathlib import Path
 from typing import Any, Callable
 
 try:
@@ -302,13 +303,23 @@ def draft(
     active_store = _store(active_settings, store)
     system = (
         f"{RULE}\n"
-        "Draft 3–6 first-person sentences, no more than 600 characters total. "
-        "Use past tense only for things in the commits. Tag each sentence with source "
-        "notes, commits, or both. Name the concrete file, function, or integration whenever "
-        "you can; unverifiable sentences will be rejected."
+        "Write a build-in-public post, not a changelog. Never put commit SHAs in the text. "
+        "Lead with the human moment from the note (what broke, what surprised you, what it cost). "
+        "Keep the author's own phrasing from the note wherever the diff supports it; add facts "
+        "from the commits only to fill gaps. Name files and functions naturally inside sentences "
+        "(for example, in cdl/llm.py I now feature-detect…), never as lists. "
+        "Write 3–6 first-person sentences, no more than 600 characters total. "
+        "Exactly one sentence may be pure voice with no file, function, or integration; every "
+        "other sentence must name something checkable. Tag each sentence with source notes, "
+        "commits, or both."
     )
     if active_settings.style_examples:
         system += "\nStyle examples from the author:\n" + active_settings.style_examples
+    style_path = Path(active_settings.style_examples_file)
+    if style_path.is_file():
+        file_examples = style_path.read_text(encoding="utf-8").strip()
+        if file_examples:
+            system += "\nAuthor's own past posts — match this voice:\n" + file_examples
     messages: list[dict[str, Any]] = [
         {
             "role": "user",

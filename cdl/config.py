@@ -20,6 +20,7 @@ except ImportError:  # pragma: no cover - dependency is listed in requirements
 DEFAULT_MODEL = "claude-sonnet-5"
 DEFAULT_REPO = "adot-7/commits-dont-lie"
 DEFAULT_DATABASE_PATH = "data/cdl.sqlite"
+DEFAULT_STYLE_EXAMPLES_FILE = "style/examples.md"
 
 REQUIRED_ENV_VARS = (
     "ADMIN_TOKEN",
@@ -65,6 +66,7 @@ class Settings:
     style_examples: str = ""
     git_sha: str = ""
     first_sha: str = ""
+    style_examples_file: str = DEFAULT_STYLE_EXAMPLES_FILE
 
 
 def _env(name: str, default: str = "") -> str:
@@ -109,6 +111,7 @@ def load_settings(*, strict: bool = True, dotenv_path: str | Path | None = None)
         style_examples=_env("STYLE_EXAMPLES"),
         git_sha=_env("GIT_SHA"),
         first_sha=_env("FIRST_SHA"),
+        style_examples_file=_env("STYLE_EXAMPLES_FILE", DEFAULT_STYLE_EXAMPLES_FILE) or DEFAULT_STYLE_EXAMPLES_FILE,
     )
 
 
