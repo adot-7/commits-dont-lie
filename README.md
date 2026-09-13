@@ -14,7 +14,9 @@ Live dashboard: [commitsdontlie.akashparashar.dev](https://commitsdontlie.akashp
 | --- | --- |
 | ✅ `SUPPORTED` | Every extracted entity matched; the post carries receipts. |
 | ⛔ `UNSUPPORTED` | At least one named entity is missing; the post is blocked. |
-| ❔ `UNVERIFIABLE` | The sentence names nothing checkable; it must be rewritten or dropped. |
+| ❔ `UNVERIFIABLE` | The sentence names nothing checkable; at most one pure-voice sentence is allowed per post. |
+
+Sentences that make no checkable claim are allowed (max one per post) and labelled as such.
 
 The LLM drafts sentences and extracts entities. Python's deterministic `claim_vs_diff` function decides the verdict and records file/line evidence. The same matcher runs at the pre-publish gate and in the post-publish monitor.
 

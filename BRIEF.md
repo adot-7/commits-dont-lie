@@ -1,6 +1,7 @@
 # What it does
 
 Every file, function, or integration a sentence names must appear in the diff — or the sentence doesn't ship. `SUPPORTED` carries receipts, `UNSUPPORTED` blocks the post, and `UNVERIFIABLE` names nothing checkable. The deterministic `claim_vs_diff` function runs at the pre-publish gate and again in the post-publish monitor.
+Sentences that make no checkable claim are allowed (max one per post) and labelled as such.
 
 # How we know it works
 

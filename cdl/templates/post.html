@@ -14,7 +14,7 @@
   <article class="sentence">
     <div class="sentence-top"><span class="status status-{{ sentence.status|lower }}">{{ sentence.status }}</span><span class="source">{{ sentence.source }}</span></div>
     <p class="sentence-text">{{ sentence.text }}</p>
-    <p class="reason">{{ sentence.reason }}</p>
+    <p class="reason">{% if sentence.status == 'UNVERIFIABLE' %}❔ no checkable claim{% else %}{{ sentence.reason }}{% endif %}</p>
     {% if sentence.evidence %}<ul class="evidence">{% for item in sentence.evidence %}<li><a class="mono" href="{{ item.github_url }}">{{ item.path }}{% if item.line_no is not none %}:{{ item.line_no }}{% endif %}</a> <span>({{ item.entity }}){% if item.line_text %} — {{ item.line_text }}{% endif %}</span></li>{% endfor %}</ul>{% endif %}
   </article>
 {% else %}<p class="empty">No sentence receipts stored.</p>{% endfor %}

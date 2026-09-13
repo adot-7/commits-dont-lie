@@ -112,7 +112,7 @@ class SlackClient:
     def post_blocked(self, post_id: int, blocked: list[tuple[str, str]]) -> str:
         """Post a blocked notice without interactive actions."""
 
-        fallback = f"⛔ Blocked — {len(blocked)} sentence(s) unsupported"
+        fallback = f"⛔ Blocked — {len(blocked)} sentence(s) failed the gate"
         blocks: list[dict[str, Any]] = [{"type": "section", "text": {"type": "mrkdwn", "text": fallback}}]
         for sentence, reason in blocked:
             blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": f"⛔ {sentence}\n{reason}"}})

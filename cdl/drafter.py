@@ -19,10 +19,16 @@ from .slack_client import SlackClient
 from .store import Store
 
 
+NO_CHECKABLE_CLAIM_LABEL = "no checkable claim"
+UNVERIFIABLE_GATE_REASON = "more than one sentence makes no checkable claim"
+
+
 def evidence_line(sentence: Sentence, verdict: Verdict) -> str:
     """Render one compact receipt line for Notion and Slack."""
 
     marker = {"SUPPORTED": "✅", "UNSUPPORTED": "⛔", "UNVERIFIABLE": "❔"}[verdict.status]
+    if verdict.status == "UNVERIFIABLE":
+        return f'{marker} "{sentence.text}" → {NO_CHECKABLE_CLAIM_LABEL}'
     receipts = []
     for receipt in verdict.evidence:
         location = receipt.path if receipt.line_no is None else f"{receipt.path}:{receipt.line_no}"
@@ -31,6 +37,19 @@ def evidence_line(sentence: Sentence, verdict: Verdict) -> str:
         receipts.append("missing: " + ", ".join(verdict.missing))
     suffix = ", ".join(receipts) if receipts else verdict.reason
     return f'{marker} "{sentence.text}" → {suffix}'
+
+
+def _gate_failures(sentences: list[Sentence], verdicts: list[Verdict]) -> list[tuple[str, str]]:
+    """Return sentence failures under the publish gate's count policy."""
+
+    unverifiable_count = sum(verdict.status == "UNVERIFIABLE" for verdict in verdicts)
+    failures: list[tuple[str, str]] = []
+    for sentence, verdict in zip(sentences, verdicts):
+        if verdict.status == "UNSUPPORTED":
+            failures.append((sentence.text, verdict.reason))
+        elif verdict.status == "UNVERIFIABLE" and unverifiable_count > 1:
+            failures.append((sentence.text, UNVERIFIABLE_GATE_REASON))
+    return failures
 
 
 def _error_post(
@@ -162,14 +181,19 @@ def maybe_draft(
                 )
             active_store.add_sentences(post_id, claims, verdicts)
             lines = [evidence_line(sentence, verdict) for sentence, verdict in zip(sentences, verdicts)]
-            blocked = [
-                (sentence.text, verdict.reason)
-                for sentence, verdict in zip(sentences, verdicts)
-                if verdict.status != "SUPPORTED"
-            ]
+            blocked = _gate_failures(sentences, verdicts)
             if blocked:
                 active_store.update_post(post_id, status="Blocked")
-                active_store.append_event("post.blocked", {"sentences": len(blocked)}, post_id=post_id)
+                gate_reason = (
+                    UNVERIFIABLE_GATE_REASON
+                    if sum(verdict.status == "UNVERIFIABLE" for verdict in verdicts) > 1
+                    else blocked[0][1]
+                )
+                active_store.append_event(
+                    "post.blocked",
+                    {"sentences": len(blocked), "reason": gate_reason},
+                    post_id=post_id,
+                )
                 notion_id = _try_notion_create(
                     active_notion,
                     active_store,

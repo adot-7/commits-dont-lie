@@ -71,3 +71,18 @@ def test_detail_missing_returns_404_and_eval_without_report_is_honest(tmp_path):
     eval_page = get(application, "/eval")
     assert eval_page.status_code == 200
     assert "No report yet" in eval_page.text or "Evaluation report" in eval_page.text
+
+
+def test_dashboard_labels_unverifiable_sentence(tmp_path):
+    """Detail pages show the no-checkable-claim receipt label."""
+
+    store = Store(tmp_path / "db.sqlite")
+    post_id = store.create_post("note", "a" * 40, "b" * 40, "Draft", "I kept going.")
+    sentence = Sentence(0, "I kept going.", "notes")
+    store.add_sentences(
+        post_id,
+        [Claim(sentence, Entities())],
+        [Verdict(0, "UNVERIFIABLE", reason="Names no file, function, or integration that can be checked against the diff.")],
+    )
+    detail = get(create_app(settings=settings(tmp_path), store=store), f"/posts/{post_id}")
+    assert "❔ no checkable claim" in detail.text

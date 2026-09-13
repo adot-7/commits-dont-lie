@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from cdl.config import Settings
-from cdl.drafter import maybe_draft
-from cdl.models import DiffContext, Entities, FileChange, Sentence
+from cdl.drafter import evidence_line, maybe_draft
+from cdl.models import DiffContext, Entities, FileChange, Sentence, Verdict
 from cdl.store import Store
 
 
@@ -68,7 +70,7 @@ class FakeSlack:
         return "123.2"
 
 
-def patch_llm(monkeypatch, *, missing=False):
+def patch_llm(monkeypatch, *, missing=False, unverifiable_indexes=()):
     """Patch LLM calls with deterministic extracted entities."""
 
     sentences = [
@@ -79,6 +81,8 @@ def patch_llm(monkeypatch, *, missing=False):
     monkeypatch.setattr("cdl.drafter.llm.draft", lambda *args, **kwargs: sentences)
 
     def extract(sentence, *args, **kwargs):
+        if sentence.idx in unverifiable_indexes:
+            return Entities()
         if missing and sentence.idx == 1:
             return Entities(symbols=["missing_fn"])
         if sentence.idx == 0:
@@ -88,6 +92,12 @@ def patch_llm(monkeypatch, *, missing=False):
         return Entities(files=["cdl/app.py"])
 
     monkeypatch.setattr("cdl.drafter.llm.extract_entities", extract)
+
+
+def test_unverifiable_evidence_line_is_labelled_for_mirrors():
+    sentence = Sentence(1, "I kept going through the weird failure.", "notes")
+    verdict = Verdict(1, "UNVERIFIABLE", reason="Names no file, function, or integration that can be checked against the diff.")
+    assert evidence_line(sentence, verdict) == '❔ "I kept going through the weird failure." → no checkable claim'
 
 
 def test_supported_draft_mirrors_to_notion_and_slack(tmp_path, monkeypatch):
@@ -121,6 +131,31 @@ def test_unsupported_draft_is_blocked_without_note_transition(tmp_path, monkeypa
     assert post["sentences"][1]["status"] == "UNSUPPORTED"
     assert slack.calls[0][0] == "blocked"
     assert not any(call[0] == "note_status" for call in notion.calls)
+
+
+@pytest.mark.parametrize(
+    ("unverifiable_indexes", "expected_status"),
+    [((1,), "Draft"), ((1, 2), "Blocked")],
+)
+def test_unverifiable_gate_allows_one_and_blocks_two(tmp_path, monkeypatch, unverifiable_indexes, expected_status):
+    """One pure-voice sentence passes; two fail with the explicit gate reason."""
+
+    patch_llm(monkeypatch, unverifiable_indexes=unverifiable_indexes)
+    store = Store(tmp_path / "db.sqlite")
+    notion = FakeNotion()
+    slack = FakeSlack()
+    post_ids = maybe_draft("b" * 40, diff=diff(), settings=settings(tmp_path), store=store, notion=notion, slack=slack)
+    post = store.get_post(post_ids[0])
+    assert post["status"] == expected_status
+    assert post["sentences"][1]["status"] == "UNVERIFIABLE"
+    if expected_status == "Draft":
+        assert slack.calls[0][0] == "draft"
+        assert "❔" in slack.calls[0][1][2][1]
+        assert "no checkable claim" in slack.calls[0][1][2][1]
+    else:
+        assert slack.calls[0][0] == "blocked"
+        blocked = slack.calls[0][1][1]
+        assert all(reason == "more than one sentence makes no checkable claim" for _, reason in blocked)
 
 
 def test_note_head_idempotency_prevents_duplicate_post(tmp_path, monkeypatch):
