@@ -1,13 +1,15 @@
 .PHONY: serve test eval secrets deploy
 
+PYTHON ?= python3
+
 serve:
-	.venv/bin/uvicorn cdl.app:app --host 127.0.0.1 --port 8000 --reload
+	$(PYTHON) -m uvicorn cdl.app:app --host 127.0.0.1 --port 8000 --reload
 
 test:
-	.venv/bin/pytest -q
+	$(PYTHON) -m pytest -q
 
 eval:
-	.venv/bin/python -m cdl eval
+	$(PYTHON) -m cdl eval
 
 # abort a commit if a secret is staged
 secrets:
