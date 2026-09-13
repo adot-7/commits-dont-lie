@@ -54,8 +54,10 @@ def test_dashboard_and_detail_render_from_sqlite(tmp_path):
     assert home.status_code == 200
     assert "Build updates with receipts" in home.text
     assert "Sent" in home.text
+    assert '<meta http-equiv="refresh" content="20">' in home.text
     assert detail.status_code == 200
     assert "SUPPORTED" in detail.text
+    assert 'http-equiv="refresh"' not in detail.text
     assert f"https://github.com/adot-7/commits-dont-lie/blob/{'b' * 40}/cdl/app.py" in detail.text
 
 
