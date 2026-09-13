@@ -25,6 +25,7 @@ def build_parser() -> argparse.ArgumentParser:
     replay.add_argument("push_id", type=int)
     eval_parser = subparsers.add_parser("eval", help="run the hand-labelled evaluation")
     eval_parser.add_argument("--cases", default="eval/cases.jsonl")
+    eval_parser.add_argument("--stale-cases", default="eval/stale_cases.jsonl")
     eval_parser.add_argument("--cache-dir", default="eval/cache")
     eval_parser.add_argument("--report-json", default="eval/report.json")
     eval_parser.add_argument("--report-md", default="eval/report.md")
@@ -117,6 +118,7 @@ def main(argv: list[str] | None = None) -> int:
 
         return eval_main([
             "--cases", args.cases,
+            "--stale-cases", args.stale_cases,
             "--cache-dir", args.cache_dir,
             "--report-json", args.report_json,
             "--report-md", args.report_md,

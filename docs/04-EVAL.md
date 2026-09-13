@@ -40,6 +40,11 @@ knows every answer because he watched the code get written.
    recall, list of misses with `expected`, `got`, `reason`. Exit non-zero if accuracy < 0.8.
 4. Dashboard `/eval` renders `report.json` — the judges can open it from the production link.
 
+The same harness also reads `eval/stale_cases.jsonl`. Each line names `id`, `base`, `head`,
+an `evidence` list of `{entity, kind, path}`, `expected_stale`, and a human `note`; it runs
+`check_staleness(evidence, compare(base, head))` and adds a staleness accuracy section to
+`report.json`, `report.md`, and `/eval`.
+
 ## 3. Production self-report (free)
 `/` shows totals since boot: pushes received, posts drafted / blocked / sent / stale,
 sentences by verdict, `entity_dropped` count, LLM tokens and estimated cost. These numbers,

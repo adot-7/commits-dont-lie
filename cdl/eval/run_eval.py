@@ -14,9 +14,9 @@ from typing import Any, Callable, Iterable
 
 from ..config import Settings, get_settings
 from ..github_client import GitHubClient
-from ..grounding.check import claim_vs_diff
+from ..grounding.check import check_staleness, claim_vs_diff
 from ..llm import extract_entities, filter_entities
-from ..models import Claim, DiffContext, Entities, FileChange, Sentence, dataclass_dict
+from ..models import Claim, DiffContext, Entities, Evidence, FileChange, Sentence, dataclass_dict
 from ..store import Store
 
 
@@ -43,6 +43,38 @@ def load_cases(path: str | Path = "eval/cases.jsonl") -> list[dict[str, Any]]:
             raise ValueError(f"case {line_number} missing: {', '.join(sorted(missing))}")
         if value["expected"] not in LABELS:
             raise ValueError(f"case {value['id']} has invalid expected verdict")
+        cases.append(value)
+    return cases
+
+
+def load_stale_cases(path: str | Path = "eval/stale_cases.jsonl") -> list[dict[str, Any]]:
+    """Load hand-labelled evidence receipts for the staleness evaluation."""
+
+    case_path = Path(path)
+    if not case_path.exists():
+        raise FileNotFoundError(f"staleness case file not found: {case_path}")
+    cases: list[dict[str, Any]] = []
+    for line_number, line in enumerate(case_path.read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            value = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"invalid JSON on {case_path}:{line_number}: {exc}") from exc
+        required = {"id", "base", "head", "evidence", "expected_stale", "note"}
+        missing = required - value.keys()
+        if missing:
+            raise ValueError(f"staleness case {line_number} missing: {', '.join(sorted(missing))}")
+        if not isinstance(value["expected_stale"], bool):
+            raise ValueError(f"staleness case {value['id']} expected_stale must be a boolean")
+        if not isinstance(value["evidence"], list):
+            raise ValueError(f"staleness case {value['id']} evidence must be a list")
+        for evidence in value["evidence"]:
+            evidence_missing = {"entity", "kind", "path"} - evidence.keys()
+            if evidence_missing:
+                raise ValueError(
+                    f"staleness case {value['id']} evidence missing: {', '.join(sorted(evidence_missing))}"
+                )
         cases.append(value)
     return cases
 
@@ -98,6 +130,12 @@ def _entities_from_case(value: dict[str, Any]) -> Entities:
     )
 
 
+def _evidence_from_case(value: dict[str, Any]) -> list[Evidence]:
+    """Convert one JSONL evidence receipt into the shared contract type."""
+
+    return [Evidence(item["entity"], item["kind"], item["path"]) for item in value["evidence"]]
+
+
 def _metrics(cases: Iterable[dict[str, Any]]) -> dict[str, Any]:
     """Build a 3×3 matrix and one-vs-rest precision/recall values."""
 
@@ -122,6 +160,20 @@ def _metrics(cases: Iterable[dict[str, Any]]) -> dict[str, Any]:
         "accuracy": round(correct / len(rows), 3) if rows else 0.0,
         "confusion_matrix": matrix,
         "per_class": per_class,
+    }
+
+
+def _staleness_metrics(cases: Iterable[dict[str, Any]]) -> dict[str, Any]:
+    """Summarize stale/not-stale predictions without changing gate policy."""
+
+    rows = list(cases)
+    correct = sum(row["expected_stale"] == row["got_stale"] for row in rows)
+    return {
+        "total": len(rows),
+        "correct": correct,
+        "accuracy": round(correct / len(rows), 3) if rows else 0.0,
+        "cases": rows,
+        "misses": [row for row in rows if row["expected_stale"] != row["got_stale"]],
     }
 
 
@@ -152,12 +204,39 @@ def render_markdown(report: dict[str, Any]) -> str:
         )
     if report.get("matcher_only"):
         lines.extend(["", "## Matcher-only cases", "", f"{report['matcher_only']['correct']}/{report['matcher_only']['total']} correct."])
+    if report.get("staleness") is not None:
+        staleness = report["staleness"]
+        lines.extend(
+            [
+                "",
+                "## Staleness cases",
+                "",
+                f"Accuracy: **{staleness['correct']}/{staleness['total']} ({staleness['accuracy']:.1%})**",
+                "",
+                "| id | expected stale | got stale | note |",
+                "|---|---:|---:|---|",
+            ]
+        )
+        for case in staleness["cases"]:
+            note = str(case.get("note", "")).replace("|", "\\|").replace("\n", " ")
+            lines.append(
+                f"| `{case['id']}` | {str(case['expected_stale']).lower()} | "
+                f"{str(case['got_stale']).lower()} | {note} |"
+            )
+        if staleness.get("misses"):
+            lines.extend(["", "Staleness misses:", ""])
+            lines.extend(
+                f"- `{miss['id']}` expected `{str(miss['expected_stale']).lower()}`, "
+                f"got `{str(miss['got_stale']).lower()}` — {miss['reason']}"
+                for miss in staleness["misses"]
+            )
     return "\n".join(lines) + "\n"
 
 
 def run_eval(
     *,
     cases_path: str | Path = "eval/cases.jsonl",
+    stale_cases_path: str | Path = "eval/stale_cases.jsonl",
     cache_dir: str | Path = "eval/cache",
     report_json: str | Path = "eval/report.json",
     report_md: str | Path = "eval/report.md",
@@ -166,13 +245,14 @@ def run_eval(
     settings: Settings | None = None,
     store: Store | None = None,
 ) -> dict[str, Any]:
-    """Run full extraction and optional matcher-only evaluation and write reports."""
+    """Run claim and staleness evaluations and write both report formats."""
 
     active_settings = settings or get_settings(strict=False)
     active_store = store or Store(active_settings.database_path)
     active_github = github or GitHubClient(active_settings, store=active_store)
     active_extractor = extractor or extract_entities
     cases = load_cases(cases_path)
+    stale_cases = load_stale_cases(stale_cases_path)
     full_rows: list[dict[str, Any]] = []
     matcher_rows: list[dict[str, Any]] = []
     for case in cases:
@@ -198,13 +278,37 @@ def run_eval(
         matcher_report.pop("per_class", None)
         report["matcher_only"] = matcher_report
     report["cases"] = full_rows
+    stale_rows: list[dict[str, Any]] = []
+    for case in stale_cases:
+        diff = _get_diff(active_github, Path(cache_dir), case["base"], case["head"])
+        stale_verdict = check_staleness(_evidence_from_case(case), diff)
+        stale_rows.append(
+            {
+                "id": case["id"],
+                "expected_stale": case["expected_stale"],
+                "got_stale": stale_verdict.stale,
+                "reason": stale_verdict.reason,
+                "note": case["note"],
+            }
+        )
+    report["staleness"] = _staleness_metrics(stale_rows)
     report_path = Path(report_json)
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     markdown_path = Path(report_md)
     markdown_path.parent.mkdir(parents=True, exist_ok=True)
     markdown_path.write_text(render_markdown(report), encoding="utf-8")
-    active_store.append_event("eval.completed", {"total": report["total"], "correct": report["correct"], "accuracy": report["accuracy"]})
+    active_store.append_event(
+        "eval.completed",
+        {
+            "total": report["total"],
+            "correct": report["correct"],
+            "accuracy": report["accuracy"],
+            "staleness_total": report["staleness"]["total"],
+            "staleness_correct": report["staleness"]["correct"],
+            "staleness_accuracy": report["staleness"]["accuracy"],
+        },
+    )
     return report
 
 
@@ -213,6 +317,7 @@ def main(argv: list[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(description="Run the CDL hand-labelled evaluation")
     parser.add_argument("--cases", default="eval/cases.jsonl")
+    parser.add_argument("--stale-cases", default="eval/stale_cases.jsonl")
     parser.add_argument("--cache-dir", default="eval/cache")
     parser.add_argument("--report-json", default="eval/report.json")
     parser.add_argument("--report-md", default="eval/report.md")
@@ -220,6 +325,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         report = run_eval(
             cases_path=args.cases,
+            stale_cases_path=args.stale_cases,
             cache_dir=args.cache_dir,
             report_json=args.report_json,
             report_md=args.report_md,
@@ -229,5 +335,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"eval failed: {exc}")
         return 1
     print(f"{report['correct']}/{report['total']} ({report['accuracy']:.1%})")
+    staleness = report["staleness"]
+    print(f"staleness: {staleness['correct']}/{staleness['total']} ({staleness['accuracy']:.1%})")
     print(render_markdown(report))
     return 0 if report["accuracy"] >= 0.8 else 1

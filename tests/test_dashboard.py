@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 
 import httpx
@@ -86,3 +87,35 @@ def test_dashboard_labels_unverifiable_sentence(tmp_path):
     )
     detail = get(create_app(settings=settings(tmp_path), store=store), f"/posts/{post_id}")
     assert "❔ no checkable claim" in detail.text
+
+
+def test_eval_renders_staleness_metrics(tmp_path, monkeypatch):
+    """The evaluation page displays the second, staleness report section."""
+
+    eval_dir = tmp_path / "eval"
+    eval_dir.mkdir()
+    (eval_dir / "report.json").write_text(
+        json.dumps(
+            {
+                "accuracy": 1.0,
+                "total": 1,
+                "correct": 1,
+                "labels": ["SUPPORTED", "UNSUPPORTED", "UNVERIFIABLE"],
+                "confusion_matrix": {label: {got: 0 for got in ["SUPPORTED", "UNSUPPORTED", "UNVERIFIABLE"]} for label in ["SUPPORTED", "UNSUPPORTED", "UNVERIFIABLE"]},
+                "per_class": {},
+                "staleness": {
+                    "accuracy": 0.5,
+                    "total": 2,
+                    "correct": 1,
+                    "cases": [],
+                    "misses": [],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    page = get(create_app(settings=settings(tmp_path), store=Store(tmp_path / "db.sqlite")), "/eval")
+    assert page.status_code == 200
+    assert "Staleness cases" in page.text
+    assert "0.5" in page.text
