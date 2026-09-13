@@ -8,6 +8,7 @@ not in command handlers.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 
 
@@ -45,6 +46,17 @@ def main(argv: list[str] | None = None) -> int:
 
         settings = load_settings(strict=True)
         uvicorn.run("cdl.app:app", host="127.0.0.1", port=8000, workers=1)
+        return 0
+    if args.command == "dump-compare":
+        from .config import load_settings
+        from .github_client import GitHubClient
+        from .models import dataclass_dict
+
+        client = GitHubClient(settings=load_settings(strict=True))
+        try:
+            print(json.dumps(dataclass_dict(client.compare(args.base, args.head)), indent=2))
+        finally:
+            client.close()
         return 0
     # Later milestones replace these placeholders with service dispatch.
     if args.command in {"draft-now", "replay", "eval", "resolve-notion-ids", "models", "dump-compare", "resync"}:

@@ -1,0 +1,36 @@
+{
+  "repo": "adot-7/commits-dont-lie",
+  "base_sha": "0553c6b",
+  "head_sha": "23a2ef7",
+  "commits": [
+    {
+      "sha": "23a2ef7",
+      "message": "feat(webhook): add signed GitHub and Slack FastAPI routes (#2)",
+      "author": "Akash",
+      "timestamp": "2026-09-13T18:31:00Z",
+      "url": "https://github.com/adot-7/commits-dont-lie/commit/23a2ef7"
+    }
+  ],
+  "files": [
+    {
+      "path": "cdl/app.py",
+      "status": "modified",
+      "previous_path": null,
+      "patch": "@@ -1,8 +1,14 @@\n-\"\"\"FastAPI entry point for CDL HTTP routes.\n+\"\"\"FastAPI entry point for CDL HTTP routes.\n+\n+from fastapi import BackgroundTasks, Request\n+from fastapi.responses import JSONResponse, Response\n+import hashlib\n+import hmac\n+\n+def _verify_github(secret, body, supplied):\n+    return hmac.compare_digest(\"sha256=\" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest(), supplied)\n",
+      "added": [
+        [3, ""],
+        [4, "from fastapi import BackgroundTasks, Request"],
+        [5, "from fastapi.responses import JSONResponse, Response"],
+        [6, "import hashlib"],
+        [7, "import hmac"],
+        [9, "def _verify_github(secret, body, supplied):"],
+        [10, "    return hmac.compare_digest(\"sha256=\" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest(), supplied)"],
+        [11, ""]
+      ],
+      "removed": [
+        [1, "\"\"\"FastAPI entry point for CDL HTTP routes."]
+      ]
+    }
+  ],
+  "truncated": false
+}
