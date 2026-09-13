@@ -25,12 +25,32 @@ INTEGRATION_ALIASES: dict[str, list[str]] = {
 
 
 NO_ENTITIES_REASON = "Names no file, function, or integration that can be checked against the diff."
+MAX_EVIDENCE_PER_ENTITY = 3
+_EVIDENCE_EXTENSIONS = (".py", ".js", ".ts", ".html", ".css", ".toml", ".cfg", ".service")
 
 
 def _basename(path: str) -> str:
     """Return a repository path's basename without importing pathlib."""
 
     return path.rsplit("/", 1)[-1]
+
+
+def _evidence_rank(path: str) -> int:
+    """Rank implementation paths above ordinary and low-signal files."""
+
+    lowered = path.lower()
+    parts = lowered.split("/")
+    if lowered.endswith(".md") or "tests" in parts or "fixtures" in parts:
+        return 2
+    if lowered.endswith(_EVIDENCE_EXTENSIONS):
+        return 0
+    return 1
+
+
+def _ordered_files(files: list[FileChange]) -> list[FileChange]:
+    """Return files in stable evidence-quality order."""
+
+    return sorted(files, key=lambda file: _evidence_rank(file.path))
 
 
 def _file_evidence(entity: str, files: list[FileChange]) -> list[Evidence]:
@@ -63,7 +83,7 @@ def match_symbol(entity: str, diff: DiffContext) -> list[Evidence]:
 
     pattern = _symbol_pattern(entity)
     matches: list[Evidence] = []
-    for file in diff.files:
+    for file in _ordered_files(diff.files):
         for line_no, line_text in file.added:
             if pattern.search(line_text):
                 matches.append(
@@ -76,6 +96,8 @@ def match_symbol(entity: str, diff: DiffContext) -> list[Evidence]:
                     )
                 )
                 break
+        if len(matches) == MAX_EVIDENCE_PER_ENTITY:
+            break
     return matches
 
 
@@ -99,22 +121,26 @@ def match_integration(entity: str, diff: DiffContext) -> list[Evidence]:
     """Find the first added-line or changed-path receipt for an integration."""
 
     tokens = _integration_tokens(entity)
-    for file in diff.files:
+    matches: list[Evidence] = []
+    for file in _ordered_files(diff.files):
+        receipt: Evidence | None = None
         for line_no, line_text in file.added:
             if any(token in line_text.lower() for token in tokens):
-                return [
-                    Evidence(
-                        entity=entity,
-                        kind="integration",
-                        path=file.path,
-                        line_no=line_no,
-                        line_text=line_text,
-                    )
-                ]
-    for file in diff.files:
-        if any(token in file.path.lower() for token in tokens):
-            return [Evidence(entity=entity, kind="integration", path=file.path)]
-    return []
+                receipt = Evidence(
+                    entity=entity,
+                    kind="integration",
+                    path=file.path,
+                    line_no=line_no,
+                    line_text=line_text,
+                )
+                break
+        if receipt is None and any(token in file.path.lower() for token in tokens):
+            receipt = Evidence(entity=entity, kind="integration", path=file.path)
+        if receipt is not None:
+            matches.append(receipt)
+        if len(matches) == MAX_EVIDENCE_PER_ENTITY:
+            break
+    return matches
 
 
 def _entities(claim: Claim) -> list[tuple[str, str]]:

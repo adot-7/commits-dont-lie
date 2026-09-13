@@ -117,6 +117,20 @@ def test_compound_anthropic_sdk_matches_anthropic_alias():
     assert verdict.evidence[0].line_no == 8
 
 
+def test_evidence_prioritizes_implementation_paths_and_caps_per_entity():
+    verdict = claim_vs_diff(
+        claim("Changed webhook", Entities(integrations=["webhook"])),
+        mk_diff(
+            file("BRIEF.md", added=[(1, "webhook")]),
+            file("README.md", added=[(1, "webhook")]),
+            file("cdl/app.py", added=[(1, "webhook" )]),
+        ),
+    )
+    assert verdict.status == "SUPPORTED"
+    assert [item.path for item in verdict.evidence] == ["cdl/app.py", "BRIEF.md", "README.md"]
+    assert len(verdict.evidence) <= 3
+
+
 def test_alias_table_is_normative():
     assert INTEGRATION_ALIASES["github"] == ["github", "x-hub-signature", "x-github"]
     assert INTEGRATION_ALIASES["webhook"] == ["webhook", "x-hub-signature", "x-github-delivery"]
