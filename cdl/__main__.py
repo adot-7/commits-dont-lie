@@ -75,6 +75,13 @@ def main(argv: list[str] | None = None) -> int:
         finally:
             client.close()
         return 0
+    if args.command == "models":
+        from .config import load_settings
+        from .llm import list_models
+
+        for model_id in list_models(settings=load_settings(strict=True)):
+            print(model_id)
+        return 0
     # Later milestones replace these placeholders with service dispatch.
     if args.command in {"draft-now", "replay", "eval", "resolve-notion-ids", "models", "dump-compare", "resync"}:
         print(f"{args.command}: not implemented yet")
