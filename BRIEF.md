@@ -19,7 +19,7 @@ The anthropic 1.5.0 SDK removed the `temperature` parameter from `messages.creat
 | Bad webhook/Slack signature | Reject with 401 and log an error event. |
 | GitHub compare failure | Retry transient failures, then log `compare.failed` and keep the affected flow visible as Errored. |
 | Missing GitHub patch | Keep the file receipt but mark unavailable-symbol claims unsupported with an explanatory suffix. |
-| Malformed LLM tool input | Retry once with the parse error; then raise `LLMError` and persist an Errored row. |
+| Malformed or overlong LLM tool input | Retry once with parse/length guidance; truncate a second overlong response to leading sentences and log `draft.truncated`, while other invalid input raises `LLMError` and persists an Errored row. |
 | Notion or Slack write failure | Keep SQLite state and mark the affected post Errored; external resync is an explicit follow-up operation. |
 | Duplicate delivery/action | Use GitHub delivery ID or Slack action timestamp as an idempotency key. |
 | Code changes before approval | Re-compare against HEAD; changed evidence becomes Stale and is never approved. |

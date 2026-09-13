@@ -172,7 +172,7 @@ Body = page content (paragraph blocks). The agent reads blocks, joins paragraphs
 
 ## 8. LLM I/O shapes (`cdl/llm.py`)
 **draft** → JSON `{"sentences": [{"text": str, "source": "notes"|"commits"|"both"}]}`, 3–6
-sentences, ≤ 600 chars total, first person, past tense only for things in the commits.
+sentences, ≤ 900 chars total, first person, past tense only for things in the commits.
 System prompt states the rule verbatim and instructs: *name the concrete file, function, or
 integration whenever you can — unverifiable sentences will be rejected.*
 **extract_entities** → JSON `{"files": [...], "symbols": [...], "integrations": [...]}` for one

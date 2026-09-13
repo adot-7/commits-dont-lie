@@ -27,6 +27,19 @@ class LLMError(RuntimeError):
     """Raised when Anthropic returns malformed tool input after one retry."""
 
 
+MAX_DRAFT_CHARACTERS = 900
+RETRY_DRAFT_CHARACTERS = 800
+
+
+class DraftTooLongError(ValueError):
+    """Carry the validated sentences and length for a bounded retry/fallback."""
+
+    def __init__(self, characters: int, sentences: list[Sentence]):
+        self.characters = characters
+        self.sentences = sentences
+        super().__init__(f"draft is {characters} characters; maximum is {MAX_DRAFT_CHARACTERS}")
+
+
 RULE = "Every file, function, or integration a sentence names must appear in the diff — or the sentence doesn't ship."
 
 DRAFT_TOOL: dict[str, Any] = {
@@ -224,9 +237,25 @@ def _validate_draft(payload: dict[str, Any]) -> list[Sentence]:
             raise ValueError(f"sentence {idx} has invalid text or source")
         total += len(text)
         sentences.append(Sentence(idx=idx, text=text, source=source))
-    if total > 600:
-        raise ValueError(f"draft is {total} characters; maximum is 600")
+    if total > MAX_DRAFT_CHARACTERS:
+        raise DraftTooLongError(total, sentences)
     return sentences
+
+
+def _truncate_sentences(sentences: list[Sentence], maximum: int = MAX_DRAFT_CHARACTERS) -> list[Sentence]:
+    """Keep the leading complete sentences that fit under the output cap."""
+
+    kept: list[Sentence] = []
+    total = 0
+    for sentence in sentences:
+        if total + len(sentence.text) > maximum:
+            break
+        kept.append(Sentence(idx=len(kept), text=sentence.text, source=sentence.source))
+        total += len(sentence.text)
+    if not kept and sentences:
+        first = sentences[0]
+        kept.append(Sentence(idx=0, text=first.text[:maximum].rstrip(), source=first.source))
+    return kept
 
 
 def _validate_entities(payload: dict[str, Any]) -> Entities:
@@ -308,7 +337,7 @@ def draft(
         "Keep the author's own phrasing from the note wherever the diff supports it; add facts "
         "from the commits only to fill gaps. Name files and functions naturally inside sentences "
         "(for example, in cdl/llm.py I now feature-detect…), never as lists. "
-        "Write 3–6 first-person sentences, no more than 600 characters total. "
+        "Write 3–6 first-person sentences, no more than 900 characters total. "
         "Exactly one sentence may be pure voice with no file, function, or integration; every "
         "other sentence must name something checkable. Tag each sentence with source notes, "
         "commits, or both."
@@ -328,12 +357,22 @@ def draft(
     ]
     client = _anthropic_client(active_settings, anthropic_client)
     last_error = ""
+    last_exception: Exception | None = None
     for attempt in range(2):
         if attempt:
+            retry_prefix = ""
+            if isinstance(last_exception, DraftTooLongError):
+                retry_prefix = (
+                    f"You returned {last_exception.characters} characters. Return at most 4 sentences "
+                    f"and stay under {RETRY_DRAFT_CHARACTERS} characters.\n"
+                )
             messages.append(
                 {
                     "role": "user",
-                    "content": f"The previous tool input was invalid: {last_error}. Return only a valid draft_sentences tool input.",
+                    "content": (
+                        f"{retry_prefix}The previous tool input was invalid: {last_error}. "
+                        "Return only a valid draft_sentences tool input."
+                    ),
                 }
             )
         try:
@@ -350,8 +389,28 @@ def draft(
             sentences = _validate_draft(_response_input(response))
             active_store.append_event("draft.generated", {"sentences": len(sentences), "characters": sum(len(item.text) for item in sentences)})
             return sentences
+        except DraftTooLongError as exc:
+            last_error = str(exc)
+            last_exception = exc
+            if attempt == 1:
+                truncated = _truncate_sentences(exc.sentences)
+                active_store.append_event(
+                    "draft.truncated",
+                    {
+                        "original_characters": exc.characters,
+                        "characters": sum(len(item.text) for item in truncated),
+                        "sentences": len(truncated),
+                    },
+                )
+                active_store.append_event(
+                    "draft.generated",
+                    {"sentences": len(truncated), "characters": sum(len(item.text) for item in truncated)},
+                )
+                return truncated
+            continue
         except Exception as exc:
             last_error = str(exc)
+            last_exception = exc
             if attempt == 1:
                 raise LLMError(f"draft tool input invalid after retry: {last_error}") from exc
     raise LLMError("draft failed")

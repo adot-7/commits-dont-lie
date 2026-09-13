@@ -137,6 +137,34 @@ def test_malformed_tool_input_gets_one_retry_with_error(tmp_path):
     assert "sentences must contain" in fake.messages.calls[1]["messages"][-1]["content"]
 
 
+def test_overlong_retry_is_guided_and_truncated_to_leading_sentences(tmp_path):
+    """An overlong second draft becomes a logged, bounded shorter post."""
+
+    first = [
+        {"text": "a" * 250, "source": "commits"},
+        {"text": "b" * 250, "source": "commits"},
+        {"text": "c" * 250, "source": "commits"},
+        {"text": "d" * 250, "source": "commits"},
+    ]
+    second = [
+        {"text": "e" * 300, "source": "commits"},
+        {"text": "f" * 300, "source": "commits"},
+        {"text": "g" * 300, "source": "commits"},
+        {"text": "h" * 300, "source": "commits"},
+    ]
+    fake = FakeClient([response({"sentences": first}), response({"sentences": second})])
+    store = Store(tmp_path / "db.sqlite")
+    sentences = draft("Retry", "note", diff(), anthropic_client=fake, store=store, settings=settings(tmp_path))
+    assert [sentence.text[0] for sentence in sentences] == ["e", "f", "g"]
+    assert sum(len(sentence.text) for sentence in sentences) == 900
+    assert fake.messages.calls[1]["messages"][-1]["content"].startswith(
+        "You returned 1000 characters. Return at most 4 sentences and stay under 800 characters."
+    )
+    rows = store._connect().execute("SELECT kind, data_json FROM events WHERE kind='draft.truncated'").fetchall()
+    assert len(rows) == 1
+    assert '"original_characters": 1200' in rows[0][1]
+
+
 def test_malformed_tool_input_after_retry_raises(tmp_path):
     """Two invalid responses become a typed LLM error."""
 
