@@ -1,76 +1,142 @@
 # Commits Don't Lie
 
-> Every build-in-public tool drafts a post that sounds like you. None of them check whether it is true. Ours does — and it keeps checking after you hit send.
+> Every build-in-public tool drafts a post that sounds like you. None of them check whether
+> it's true. Ours does — and it keeps checking after you hit send.
 
-Commits Don't Lie turns GitHub commits and Notion development notes into a build-update draft, then refuses to send any sentence it cannot point to in the diff. A human approves the grounded draft in Slack. Later pushes re-check every Sent post and thread a correction when cited code disappears.
+**Live:** https://commitsdontlie.akashparashar.dev · **Demo video:** _link below (§05)_ ·
+**Reliability brief:** [`BRIEF.md`](BRIEF.md)
 
-Live dashboard: [commitsdontlie.akashparashar.dev](https://commitsdontlie.akashparashar.dev/) · [post audit view](https://commitsdontlie.akashparashar.dev/posts/1) · [reliability brief](BRIEF.md)
+Built solo in one night at the Multi-App AI Agent Hackathon (Lemma × Comma Capital, 13 Sep 2026).
+Every post on the live dashboard was generated from this repository's own commits during the build.
 
-## The check
+---
 
-**Every file, function, or integration a sentence names must appear in the diff — or the sentence doesn't ship.**
+## 01 · Project overview
+
+**The problem.** Developers who build in public write "here's what I shipped" posts from memory
+and intent. Tools that automate this draft from commits and optimise for *voice* — none of them
+check whether the draft is *true*. A note that says "wired the dashboard tonight" becomes a post
+even when the dashboard commit never landed. And once a post is out, nobody re-checks it when the
+code it described gets deleted next week.
+
+**What we built.** An agent that reads your GitHub commits and your Notion dev notes, drafts a
+build-update post in your voice, and **refuses to publish any sentence it cannot point to in the
+diff**. Approved drafts go to Slack for one-tap approval and a hand-off to X. After publishing,
+**every future push re-checks every published post**: if the code a post cited is removed or
+renamed, the post is flagged *Stale* and a correction is threaded under the original message.
+
+**The check, in one sentence:**
+
+> Every file, function, or integration a sentence names must appear in the diff — or the
+> sentence doesn't ship.
 
 | Verdict | Meaning |
-| --- | --- |
-| ✅ `SUPPORTED` | Every extracted entity matched; the post carries receipts. |
-| ⛔ `UNSUPPORTED` | At least one named entity is missing; the post is blocked. |
-| ❔ `UNVERIFIABLE` | The sentence names nothing checkable; at most one pure-voice sentence is allowed per post. |
+|---|---|
+| ✅ SUPPORTED | every named thing was found in the diff; receipts (file:line) attached |
+| ⛔ UNSUPPORTED | a named thing is missing from the diff → **post blocked**, reason shown |
+| ❔ UNVERIFIABLE | names nothing checkable (pure voice) → allowed, max one per post, labelled |
 
-Sentences that make no checkable claim are allowed (max one per post) and labelled as such.
+**How it decides.** The LLM does two jobs only: it *drafts* sentences and it *extracts* the
+files/symbols/integrations each sentence names. A deterministic Python function
+(`cdl/grounding/check.py::claim_vs_diff`) then matches those entities against the actual diff.
+The model never emits a verdict. A substring guard drops any extracted entity that isn't literally
+in the sentence, so the model can't smuggle in names that happen to be in the diff.
 
-The LLM drafts sentences and extracts entities. Python's deterministic `claim_vs_diff` function decides the verdict and records file/line evidence. The same matcher runs at the pre-publish gate and in the post-publish monitor.
+**One function, two call sites.** The same matcher runs at the pre-publish gate and, inverted,
+in the post-publish monitor (`check_staleness`): did this new diff *remove* a receipt an
+already-published post depends on?
 
-## What is visible
+## 02 · External apps used
 
-The [dashboard](https://commitsdontlie.akashparashar.dev/) shows post status, commit ranges, sentence verdicts, evidence receipts, staleness, event-derived counters, LLM token totals, and estimated cost. Each post detail page links a receipt to the corresponding GitHub blob line. The [evaluation page](https://commitsdontlie.akashparashar.dev/eval) renders `eval/report.json` when the hand-labelled set has been run.
+| App | Role | How |
+|---|---|---|
+| **GitHub** | Source of truth. Push webhook triggers every run; the compare API supplies the diff with line numbers. | Webhook with HMAC-SHA256 verification; REST `compare` endpoint; fine-grained PAT (read-only). |
+| **Notion** | Input *and* output. Your dev notes (what you *meant*) are read from a Notes database; every post is mirrored to a Posts database with status, receipts, and a link to the correction. | REST API version `2025-09-03` (data sources); schema asserted at boot. |
+| **Slack** | Human approval. Drafts arrive with receipts and Approve/Reject buttons; approval re-checks against HEAD; corrections are threaded under the original message. | Bot token + signed interactions endpoint; Block Kit; `chat.update`; `thread_ts`. |
+| **Anthropic** | Drafting and entity extraction only, via forced `tool_use` JSON schemas. | Claude Sonnet; never decides a verdict. |
+| **X** | Hand-off. After approval, a "Post on X" button opens the compose box prefilled via the web intent — a human presses Post. | No paid write API used, deliberately. |
 
-## Architecture
+## 03 · Setup instructions
 
-```text
-GitHub push ──webhook──▶ /webhook/github ──202──▶ background pipeline
-                                                     │
-                                  ┌──────────────────┴──────────────────┐
-                                  │ monitor Sent posts → Stale/correction│
-                                  │ ready Notion note → compare → LLM    │
-                                  │ extract → claim_vs_diff → gate       │
-                                  └──────────────┬───────────────┬───────┘
-                                                 │               │
-                                           Notion mirror   Slack approval
-Browser ──▶ SQLite-backed Jinja dashboard ◀────────────────────────────
-```
-
-One Python process, one uvicorn worker, FastAPI, synchronous `httpx` REST clients, Slack Web API, Anthropic tool use, Jinja, and SQLite. GitHub is ground truth; Notion is both the human note input and the post mirror; Slack is the approval and correction surface.
-
-## Setup
-
-1. Follow the [deployment and integration runbook](docs/07-DEPLOY.md): provision the small VM, create the GitHub webhook, Notion Notes/Posts data sources, and Slack app.
-2. Copy `.env.example` to `.env`, fill the credentials, and never commit `.env`.
-3. Install dependencies with `python3 -m pip install -r requirements.txt` (Python 3.12 is the target runtime). Initialize the database with the first server start.
-4. Resolve and validate Notion IDs: `python -m cdl resolve-notion-ids`; verify the model with `python -m cdl models`.
-5. Run locally with `make serve`; check `GET /healthz`. A push to `refs/heads/main` or an authenticated `POST /draft-now` starts the pipeline.
-
-The CLI also exposes `dump-compare`, `replay <push_id>`, and `eval`. See the [architecture](docs/01-ARCHITECTURE.md), [data contracts](docs/02-DATA-CONTRACTS.md), and [integration calls](docs/03-INTEGRATIONS.md) for exact payloads.
-
-## Evaluation
-
-Create `eval/cases.jsonl` with 15 hand-labelled cases: five real commit ranges, each with a true named claim, a false named claim, and a vague claim. Then run:
+Runs as one Python 3.12 process (FastAPI) behind Caddy on a 1 GB VM. No Docker, no queue.
 
 ```bash
-make test
-make eval
+git clone https://github.com/adot-7/commits-dont-lie.git && cd commits-dont-lie
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+cp .env.example .env            # fill every value; no inline comments (systemd EnvironmentFile)
 ```
 
-The harness caches GitHub compares in `eval/cache/`, runs extraction → substring filter → matcher, runs an optional matcher-only pass for hand-written entities, and writes `eval/report.json` plus `eval/report.md`. It exits non-zero below 80% accuracy.
+1. **GitHub** — fine-grained PAT (Contents + Metadata, read-only) → `GITHUB_TOKEN`. Generate
+   `GITHUB_WEBHOOK_SECRET` (`openssl rand -hex 32`). After deploy: repo → Settings → Webhooks →
+   payload URL `https://<host>/webhook/github`, JSON, that secret, push events only.
+2. **Notion** — internal integration → `NOTION_TOKEN`. Create two databases under one page and
+   connect the integration to the page:
+   - `Notes`: `Name` (title), `Status` (select: Writing / Ready / Drafted), `Created` (created time)
+   - `Posts`: `Name`, `Status` (select: Blocked / Draft / Sent / Rejected / Stale / Correction / Errored),
+     `Post Text`, `Evidence`, `Commit Range`, `Head SHA`, `Slack TS` (text), `Superseded By`
+     (relation → Posts), `Note` (relation → Notes), `Dashboard` (URL)
+   - Put the two database IDs in `.env`, then `python -m cdl resolve-notion-ids` → paste the two
+     data-source IDs. The app asserts this schema at boot and names anything missing.
+3. **Slack** — app with scopes `chat:write`, `chat:write.public` → `SLACK_BOT_TOKEN`; Basic
+   Information → Signing Secret → `SLACK_SIGNING_SECRET`; invite the bot to a channel →
+   `SLACK_CHANNEL_ID`. Interactivity **on**, Socket Mode **off**, Request URL
+   `https://<host>/slack/interactions`.
+4. **Anthropic** — `ANTHROPIC_API_KEY`; `python -m cdl models` to confirm `ANTHROPIC_MODEL`.
+5. `ADMIN_TOKEN` (`openssl rand -hex 16`) protects `POST /draft-now`. `FIRST_SHA` sets the base
+   of the first post's range. Optional `style/examples.md` holds past posts for voice.
 
-## Limitations and future work
+**Run:** `python -m cdl serve` (validates config, asserts Notion schema, then serves on
+127.0.0.1:8000). Production files: `deploy/cdl.service`, `deploy/Caddyfile`, `deploy/deploy.sh`;
+full VM runbook in [`docs/07-DEPLOY.md`](docs/07-DEPLOY.md).
 
-- The checker is lexical, not semantic: it verifies presence of a file, symbol, or integration, not whether the sentence characterizes the change correctly.
-- Staleness is conservative for integrations and does not model semantic drift or world-state drift.
-- This build monitors one public repository and one Slack channel; it has no auth/multi-user layer.
-- Posting to X uses the web intent (human presses Post); the paid write API is deliberately not used.
-- It deliberately does not use Notion Workers, support multi-repo workflows, or add a general hallucination detector.
-- Future work: a paid X write API, multi-repo/auth support, semantic claim checks, and richer correction editing.
+**Use:** write a note in Notion → set `Ready` → push (or `POST /draft-now`). Blocked posts say
+why and leave the note `Ready`; passing drafts arrive in Slack with receipts. Approve → Sent →
+"Post on X". Every later push re-checks every Sent post.
 
-## Project status
+## 04 · Reliability testing
 
-The source milestones are implemented as small issue-scoped commits on `main`. Production dogfooding, the hand-labelled eval set, recording, and submission remain operator steps because they require Akash's live Notion/Slack/GitHub accounts and approval.
+**Show how you know it works** was the brief; this is how.
+
+- **Offline test suite** — `make test`. Covers the diff parser (hunk-header line numbers), every
+  verdict rule (file / symbol / integration matching, alias expansion, evidence ranking and cap,
+  UNVERIFIABLE boundary), every staleness rule (removed file, renamed file, net-removed symbol,
+  *moved* symbol is not stale, body edit is not stale), the substring guard, `tool_use` validation,
+  the publish gate, approval mid-check, corrections, dashboard rendering, and the eval harness.
+- **Hand-labelled evaluation set** — [`eval/cases.jsonl`](eval/cases.jsonl): 30 sentences
+  written in the author's voice against 8 real commits from this night — for each commit one true
+  claim, one plausible false claim naming code the commit did not touch, one pure-voice sentence —
+  plus 6 adversarial cases (real file in the wrong range, near-miss filename, multi-word
+  integration, two entities with one missing, decoy integration, pure voice). `make eval` runs the
+  full production path (extract → guard → match) and writes a 3×3 confusion matrix with per-class
+  precision/recall to `eval/report.md`, rendered live at `/eval`.
+- **Live event log** — every external call and every verdict is an append-only event in SQLite and
+  a JSON line on stdout: `push.received`, `compare.fetched`, `llm.call` (tokens, ms), `verdict`
+  (status, evidence, missing, reason), `entity_dropped`, `post.blocked`, `post.drafted`,
+  `midcheck.passed|stale`, `post.sent`, `monitor.checked`, `post.stale`, `correction.threaded`,
+  `notion.failed`, `error`. The dashboard's counters are computed from this log. Nothing fails
+  silently: a failed external write marks the post `Errored` with the component and reason.
+- **Dogfooding** — the tool was pointed at its own repository during the build. The posts on the
+  live dashboard are real; the blocked sentences were real over-claims from real notes.
+- **Failure handling** — bad signatures → 401 and logged; GitHub compare retried then `Errored`;
+  missing patches make symbol claims unsupported with an explicit suffix; malformed LLM output
+  retried once with the error, then `Errored`; duplicate webhook deliveries and Slack actions are
+  idempotent; code that changes between draft and Approve is caught by the mid-check and never
+  sent. The full table, as shipped, is in [`BRIEF.md`](BRIEF.md).
+- **What it does not do** — the check is lexical, not semantic: a sentence can name the right
+  file and still mischaracterise what changed inside it. Integration names alone are weak
+  receipts. Drift is tracked for *this repository's* code only, not the outside world. Single
+  repo, single channel, single operator. These are stated, not hidden.
+
+## 05 · Demo video
+
+**▶ [DEMO VIDEO — link goes here]** (2:00)
+
+What it shows, in order: a real note over-claims → the gate blocks the sentence and names it →
+the fixed draft passes with file:line receipts → Approve re-checks HEAD and hands off to X →
+a post published earlier cited a function that was later renamed, and the monitor flagged it
+Stale with a threaded correction.
+
+---
+
+Architecture, data contracts, integration call sheets, eval plan, and the deploy runbook are in
+[`docs/`](docs/) and [`AGENTS.md`](AGENTS.md). MIT.
