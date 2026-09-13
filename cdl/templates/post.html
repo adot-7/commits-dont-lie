@@ -9,6 +9,7 @@
   <div class="range"><span>Commit range</span><a class="mono" href="https://github.com/{{ settings.github_repo }}/compare/{{ post.base_sha }}...{{ post.head_sha }}">{{ post.base_sha[:7] }}..{{ post.head_sha[:7] }}</a></div>
 </section>
 <section class="panel post-copy"><h2>Post text</h2><p>{{ post.text }}</p></section>
+{% if post.status == 'Sent' and x_intent_url %}<section class="panel"><div class="panel-heading"><h2>Share this post</h2><span>human-driven web intent</span></div><a href="{{ x_intent_url }}" target="_blank" rel="noopener">Post on X</a></section>{% endif %}
 <section class="panel"><div class="panel-heading"><h2>Sentence receipts</h2><span>{{ post.sentences|length }} sentences</span></div>
 {% for sentence in post.sentences %}
   <article class="sentence">

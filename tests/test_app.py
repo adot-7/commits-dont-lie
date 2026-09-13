@@ -6,6 +6,7 @@ import hashlib
 import asyncio
 import hmac
 import json
+from urllib.parse import urlencode
 
 import httpx
 
@@ -146,6 +147,45 @@ def test_slack_interaction_acknowledges_valid_signature(tmp_path):
     )
     assert response.status_code == 200
     assert response.content == b""
+
+
+def test_post_on_x_interaction_is_logged_and_not_dispatched(tmp_path):
+    """The X intent callback is acknowledged without approval work."""
+
+    settings = make_settings(tmp_path)
+    store = Store(tmp_path / "cdl.sqlite")
+    dispatched = []
+
+    async def approval_handler(*_args, **_kwargs):
+        dispatched.append(True)
+
+    application = create_app(settings=settings, store=store, approval_handler=approval_handler)
+    payload = json.dumps({"type": "block_actions", "actions": [{"action_id": "post_on_x"}]})
+    body = urlencode({"payload": payload}).encode()
+    timestamp = "1700000000"
+    response = asyncio.run(
+        request(
+            application,
+            "POST",
+            "/slack/interactions",
+            content=body,
+            headers={
+                "X-Slack-Request-Timestamp": timestamp,
+                "X-Slack-Signature": signed_slack(body, settings.slack_signing_secret, timestamp),
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+        )
+    )
+    assert response.status_code == 200
+    assert dispatched == []
+    connection = store._connect()
+    try:
+        events = connection.execute("SELECT kind, data_json FROM events").fetchall()
+    finally:
+        connection.close()
+    assert len(events) == 1
+    assert events[0]["kind"] == "approval.received"
+    assert json.loads(events[0]["data_json"])["action_id"] == "post_on_x"
 
 
 def test_draft_now_requires_admin_token_and_acknowledges_valid_request(tmp_path):

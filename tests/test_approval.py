@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from urllib.parse import quote
 
 from cdl.approval import handle_interaction
 from cdl.config import Settings
@@ -146,7 +147,16 @@ def test_approve_update_preserves_post_text_and_evidence_blocks(tmp_path):
     assert "handle_push" in updated[1]["elements"][0]["text"]
     assert updated[2]["type"] == "context"
     assert updated[2]["elements"][0]["text"] == "✅ Approved by @akash — copy & post"
-    assert all(block["type"] != "actions" for block in updated)
+    x_buttons = [
+        element
+        for block in updated
+        if block["type"] == "actions"
+        for element in block["elements"]
+        if element.get("action_id") == "post_on_x"
+    ]
+    assert len(x_buttons) == 1
+    assert x_buttons[0]["text"]["text"] == "Post on X"
+    assert x_buttons[0]["url"] == f"https://x.com/intent/post?text={quote(post['text'])}"
 
 
 def test_approve_after_receipt_removal_becomes_stale(tmp_path):

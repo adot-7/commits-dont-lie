@@ -185,6 +185,7 @@ async def handle_interaction(
             channel=fields["channel_id"],
             blocks=fields["message_blocks"],
             post=post,
+            x_intent_text=post["text"],
         )
     except Exception as exc:
         _mark_error(active_store, post_id, "slack", str(exc))

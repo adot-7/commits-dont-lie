@@ -26,7 +26,7 @@ The anthropic 1.5.0 SDK removed the `temperature` parameter from `messages.creat
 
 # What it doesn't do
 
-The check is lexical, not semantic. It tracks drift from this repository only, not regulations or third-party world state. The shipped scope is one repository, one channel, and one operator. There is no X posting, multi-repo/auth layer, general hallucination detector, or Notion Worker; the human copies an approved Slack draft to the final public channel.
+The check is lexical, not semantic. It tracks drift from this repository only, not regulations or third-party world state. The shipped scope is one repository, one channel, and one operator. Posting to X uses the web intent (human presses Post); the paid write API is deliberately not used. There is no multi-repo/auth layer, general hallucination detector, or Notion Worker.
 
 # Architecture
 

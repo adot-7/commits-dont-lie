@@ -8,6 +8,7 @@ transitions; those belong to drafter, approval, and monitor orchestration.
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import quote
 
 try:
     from slack_sdk import WebClient
@@ -20,6 +21,12 @@ from .store import Store
 
 class SlackError(RuntimeError):
     """Raised when a Slack API call fails."""
+
+
+def x_intent_url(post_text: str) -> str:
+    """Build the human-driven X web-intent URL for approved post text."""
+
+    return f"https://x.com/intent/post?text={quote(post_text)}"
 
 
 def _response_value(response: Any, key: str, default: Any = None) -> Any:
@@ -105,21 +112,42 @@ class SlackClient:
             self._evidence_context(self._evidence_lines_from_post(post)),
         ]
 
-    def _replace_actions(self, blocks: list[dict[str, Any]], text: str) -> list[dict[str, Any]]:
-        """Replace actions in original blocks while preserving every other block."""
+    def _replace_actions(
+        self,
+        blocks: list[dict[str, Any]],
+        text: str,
+        *,
+        x_intent_text: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Replace terminal actions while preserving text and receipt blocks."""
 
         context = {"type": "context", "elements": [{"type": "mrkdwn", "text": text}]}
+        replacement: list[dict[str, Any]] = [context]
+        if x_intent_text is not None:
+            replacement.append(
+                {
+                    "type": "actions",
+                    "elements": [
+                        {
+                            "type": "button",
+                            "text": {"type": "plain_text", "text": "Post on X"},
+                            "action_id": "post_on_x",
+                            "url": x_intent_url(x_intent_text),
+                        }
+                    ],
+                }
+            )
         updated: list[dict[str, Any]] = []
         replaced = False
         for block in blocks:
             if block.get("type") == "actions":
                 if not replaced:
-                    updated.append(context)
+                    updated.extend(replacement)
                     replaced = True
                 continue
             updated.append(block)
         if not replaced:
-            updated.append(context)
+            updated.extend(replacement)
         return updated
 
     def post_draft(self, post_id: int, text: str, evidence_lines: list[str]) -> str:
@@ -177,6 +205,7 @@ class SlackClient:
         *,
         channel: str | None = None,
         post: dict[str, Any] | None = None,
+        x_intent_text: str | None = None,
     ) -> None:
         """Update terminal status while preserving the draft text and receipts."""
 
@@ -190,7 +219,7 @@ class SlackClient:
             channel=channel or self.settings.slack_channel_id,
             ts=ts,
             text=text,
-            blocks=self._replace_actions(original, text),
+            blocks=self._replace_actions(original, text, x_intent_text=x_intent_text),
         )
 
     def post_thread_reply(self, thread_ts: str, text: str, *, channel: str | None = None) -> str:

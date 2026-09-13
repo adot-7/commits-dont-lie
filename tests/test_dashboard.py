@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
+from urllib.parse import quote
 
 import httpx
 
@@ -60,6 +61,8 @@ def test_dashboard_and_detail_render_from_sqlite(tmp_path):
     assert "SUPPORTED" in detail.text
     assert 'http-equiv="refresh"' not in detail.text
     assert f"https://github.com/adot-7/commits-dont-lie/blob/{'b' * 40}/cdl/app.py" in detail.text
+    assert f"https://x.com/intent/post?text={quote('I changed cdl/app.py.')}" in detail.text
+    assert "Post on X" in detail.text
 
 
 def test_detail_missing_returns_404_and_eval_without_report_is_honest(tmp_path):

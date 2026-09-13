@@ -26,6 +26,7 @@ except ImportError:  # pragma: no cover - exercised only in minimal local envs
 
 from .config import Settings, get_settings
 from .pipeline import handle_push
+from .slack_client import x_intent_url
 from .store import Store
 
 
@@ -162,7 +163,13 @@ def create_app(
         return templates.TemplateResponse(
             request=request,
             name="post.html",
-            context={"settings": active_settings, "post": post, "original": original, "correction": correction},
+            context={
+                "settings": active_settings,
+                "post": post,
+                "original": original,
+                "correction": correction,
+                "x_intent_url": x_intent_url(post["text"]) if post["status"] == "Sent" else None,
+            },
         )
 
     @application.get("/eval", response_class=HTMLResponse)
@@ -254,7 +261,11 @@ def create_app(
             active_store.append_event("error", {"component": "slack_interactions", "reason": str(exc)})
             return JSONResponse({"detail": "invalid payload"}, status_code=400)
 
-        active_store.append_event("approval.received", _event_payload(payload))
+        action = (payload.get("actions") or [{}])[0] or {}
+        action_id = str(action.get("action_id", ""))
+        active_store.append_event("approval.received", {**_event_payload(payload), "action_id": action_id})
+        if action_id == "post_on_x":
+            return Response(status_code=200)
         if approval_handler is None:
             from .approval import handle_interaction
 

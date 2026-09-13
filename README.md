@@ -67,8 +67,9 @@ The harness caches GitHub compares in `eval/cache/`, runs extraction → substri
 - The checker is lexical, not semantic: it verifies presence of a file, symbol, or integration, not whether the sentence characterizes the change correctly.
 - Staleness is conservative for integrations and does not model semantic drift or world-state drift.
 - This build monitors one public repository and one Slack channel; it has no auth/multi-user layer.
-- It deliberately does not post to X/Twitter, use Notion Workers, support multi-repo workflows, or add a general hallucination detector.
-- Future work: X posting after the paid write API is available, multi-repo/auth support, semantic claim checks, and richer correction editing.
+- Posting to X uses the web intent (human presses Post); the paid write API is deliberately not used.
+- It deliberately does not use Notion Workers, support multi-repo workflows, or add a general hallucination detector.
+- Future work: a paid X write API, multi-repo/auth support, semantic claim checks, and richer correction editing.
 
 ## Project status
 
