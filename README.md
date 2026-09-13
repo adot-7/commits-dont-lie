@@ -11,6 +11,14 @@
 Built solo in one night at the Multi-App AI Agent Hackathon (Lemma × Comma Capital, 13 Sep 2026).
 Every post on the live dashboard was generated from this repository's own commits during the build.
 
+**Commit timeline, stated plainly** — the last commit containing functional code is
+[`4fb4a7b`](https://github.com/adot-7/commits-dont-lie/commit/4fb4a7b) (`fix(monitor): preserve
+Slack corrections across Notion failures`), pushed at 15:09 PT, 51 minutes before the 16:00
+deadline. Everything after it is non-functional: one documentation commit adding the demo video
+link, and two **empty commits** (`git commit --allow-empty`) containing zero changes — a push is
+what triggers the agent, so those were the only way to re-run the demo for recording. Verify with
+`git log --stat`. For a project about not overstating what you shipped, it seemed right to say so.
+
 ---
 
 ## 01 · Project overview
