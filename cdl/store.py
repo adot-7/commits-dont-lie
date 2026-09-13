@@ -258,6 +258,20 @@ class Store:
         finally:
             connection.close()
 
+    def mark_note_seen(self, note_page_id: str, title: str, status: str = "Ready") -> None:
+        """Remember the latest metadata observed for one Notion note."""
+
+        connection = self._connect()
+        try:
+            connection.execute(
+                """INSERT INTO notes_seen(note_page_id,title,status,first_seen_at) VALUES(?,?,?,?)
+                   ON CONFLICT(note_page_id) DO UPDATE SET title=excluded.title,status=excluded.status""",
+                (note_page_id, title, status, _now()),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
     def add_sentences(self, post_id: int, claims: Iterable[Claim], verdicts: Iterable[Verdict]) -> None:
         """Persist sentence, entity, verdict, and evidence rows atomically."""
 

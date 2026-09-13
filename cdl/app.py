@@ -80,11 +80,18 @@ def _event_payload(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def create_app(*, settings: Settings | None = None, store: Store | None = None) -> FastAPI:
+def create_app(
+    *,
+    settings: Settings | None = None,
+    store: Store | None = None,
+    push_handler: Any | None = None,
+    approval_handler: Any | None = None,
+) -> FastAPI:
     """Build a FastAPI app with injectable settings and SQLite store."""
 
     active_settings = settings or get_settings(strict=False)
     active_store = store or Store(active_settings.database_path)
+    active_push_handler = push_handler or handle_push
     application = FastAPI(title="Commits Don't Lie")
     application.state.settings = active_settings
     application.state.store = active_store
@@ -153,7 +160,7 @@ def create_app(*, settings: Settings | None = None, store: Store | None = None) 
             {**_event_payload(payload), "delivery_id": delivery_id},
             push_id=push_id,
         )
-        background_tasks.add_task(handle_push, push_id, store=active_store)
+        background_tasks.add_task(active_push_handler, push_id, store=active_store)
         return JSONResponse({"accepted": True, "push_id": push_id}, status_code=202)
 
     @application.post("/slack/interactions")
@@ -179,9 +186,14 @@ def create_app(*, settings: Settings | None = None, store: Store | None = None) 
             return JSONResponse({"detail": "invalid payload"}, status_code=400)
 
         active_store.append_event("approval.received", _event_payload(payload))
-        from .approval import handle_interaction
+        if approval_handler is None:
+            from .approval import handle_interaction
 
-        background_tasks.add_task(handle_interaction, payload, store=active_store)
+            active_approval_handler = handle_interaction
+        else:
+            active_approval_handler = approval_handler
+
+        background_tasks.add_task(active_approval_handler, payload, store=active_store)
         return Response(status_code=200)
 
     return application

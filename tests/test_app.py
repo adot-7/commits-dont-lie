@@ -50,6 +50,12 @@ def signed_slack(body: bytes, secret: str, timestamp: str = "1700000000") -> str
     return "v0=" + hmac.new(secret.encode(), base, hashlib.sha256).hexdigest()
 
 
+async def noop_push_handler(_push_id, *, store):
+    """Keep endpoint tests focused on HTTP behavior, not external pipeline calls."""
+
+    del store
+
+
 async def request(app, method: str, path: str, **kwargs) -> httpx.Response:
     """Exercise the ASGI app without the environment's sync TestClient threadpool."""
 
@@ -64,7 +70,7 @@ def test_webhook_rejects_bad_signature(tmp_path):
     store = Store(tmp_path / "cdl.sqlite")
     response = asyncio.run(
         request(
-            create_app(settings=make_settings(tmp_path), store=store),
+            create_app(settings=make_settings(tmp_path), store=store, push_handler=noop_push_handler),
             "POST",
             "/webhook/github",
             content=b"{}",
@@ -80,7 +86,7 @@ def test_webhook_persists_and_deduplicates_push(tmp_path):
 
     settings = make_settings(tmp_path)
     store = Store(tmp_path / "cdl.sqlite")
-    application = create_app(settings=settings, store=store)
+    application = create_app(settings=settings, store=store, push_handler=noop_push_handler)
     payload = {
         "ref": "refs/heads/main",
         "before": "0" * 40,
@@ -103,7 +109,7 @@ def test_webhook_persists_and_deduplicates_push(tmp_path):
 def test_health_and_placeholder(tmp_path):
     """The public M0 URLs exist without external credentials."""
 
-    application = create_app(settings=make_settings(tmp_path), store=Store(tmp_path / "cdl.sqlite"))
+    application = create_app(settings=make_settings(tmp_path), store=Store(tmp_path / "cdl.sqlite"), push_handler=noop_push_handler)
     health = asyncio.run(request(application, "GET", "/healthz"))
     home = asyncio.run(request(application, "GET", "/"))
     assert health.json()["ok"] is True
@@ -115,7 +121,7 @@ def test_slack_interaction_acknowledges_valid_signature(tmp_path):
 
     settings = make_settings(tmp_path)
     store = Store(tmp_path / "cdl.sqlite")
-    application = create_app(settings=settings, store=store)
+    application = create_app(settings=settings, store=store, push_handler=noop_push_handler)
     payload = json.dumps({"type": "block_actions", "actions": []})
     body = f"payload={payload}".encode()
     timestamp = "1700000000"

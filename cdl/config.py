@@ -64,6 +64,7 @@ class Settings:
     database_path: str
     style_examples: str = ""
     git_sha: str = ""
+    first_sha: str = ""
 
 
 def _env(name: str, default: str = "") -> str:
@@ -107,6 +108,7 @@ def load_settings(*, strict: bool = True, dotenv_path: str | Path | None = None)
         database_path=_env("DATABASE_PATH", DEFAULT_DATABASE_PATH) or DEFAULT_DATABASE_PATH,
         style_examples=_env("STYLE_EXAMPLES"),
         git_sha=_env("GIT_SHA"),
+        first_sha=_env("FIRST_SHA"),
     )
 
 
