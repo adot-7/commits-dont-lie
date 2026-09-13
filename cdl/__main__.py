@@ -8,6 +8,7 @@ not in command handlers.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import sys
 
@@ -81,6 +82,31 @@ def main(argv: list[str] | None = None) -> int:
 
         for model_id in list_models(settings=load_settings(strict=True)):
             print(model_id)
+        return 0
+    if args.command == "draft-now":
+        from .config import load_settings
+        from .drafter import maybe_draft
+        from .github_client import GitHubClient
+        from .store import Store
+
+        settings = load_settings(strict=True)
+        store = Store(settings.database_path)
+        github = GitHubClient(settings, store=store)
+        try:
+            head = args.head or github.head_sha("main")
+            post_ids = maybe_draft(head, settings=settings, store=store, github=github)
+            print(json.dumps({"head": head, "post_ids": post_ids}))
+        finally:
+            github.close()
+        return 0
+    if args.command == "replay":
+        from .config import load_settings
+        from .pipeline import handle_push
+        from .store import Store
+
+        settings = load_settings(strict=True)
+        store = Store(settings.database_path)
+        asyncio.run(handle_push(args.push_id, settings=settings, store=store))
         return 0
     # Later milestones replace these placeholders with service dispatch.
     if args.command in {"draft-now", "replay", "eval", "resolve-notion-ids", "models", "dump-compare", "resync"}:

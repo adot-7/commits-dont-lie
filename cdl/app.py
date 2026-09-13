@@ -80,18 +80,39 @@ def _event_payload(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+async def _draft_now_background(
+    head: str | None = None,
+    *,
+    store: Store,
+    settings: Settings,
+) -> None:
+    """Resolve HEAD and run the drafter outside the HTTP acknowledgement."""
+
+    from .drafter import maybe_draft
+    from .github_client import GitHubClient
+
+    github = GitHubClient(settings, store=store)
+    try:
+        target = head or github.head_sha("main")
+        maybe_draft(target, settings=settings, store=store, github=github)
+    except Exception as exc:
+        store.append_event("error", {"component": "draft-now", "reason": str(exc)})
+
+
 def create_app(
     *,
     settings: Settings | None = None,
     store: Store | None = None,
     push_handler: Any | None = None,
     approval_handler: Any | None = None,
+    draft_handler: Any | None = None,
 ) -> FastAPI:
     """Build a FastAPI app with injectable settings and SQLite store."""
 
     active_settings = settings or get_settings(strict=False)
     active_store = store or Store(active_settings.database_path)
     active_push_handler = push_handler or handle_push
+    active_draft_handler = draft_handler or _draft_now_background
     application = FastAPI(title="Commits Don't Lie")
     application.state.settings = active_settings
     application.state.store = active_store
@@ -195,6 +216,25 @@ def create_app(
 
         background_tasks.add_task(active_approval_handler, payload, store=active_store)
         return Response(status_code=200)
+
+    @application.post("/draft-now")
+    async def draft_now(request: Request, background_tasks: BackgroundTasks) -> Response:
+        """Authorize a manual draft trigger and acknowledge it immediately."""
+
+        authorization = request.headers.get("Authorization", "")
+        expected = f"Bearer {active_settings.admin_token}"
+        if not active_settings.admin_token or not hmac.compare_digest(authorization, expected):
+            active_store.append_event("error", {"component": "draft-now", "reason": "invalid admin token"})
+            return JSONResponse({"detail": "unauthorized"}, status_code=401)
+        head = request.query_params.get("head")
+        background_tasks.add_task(
+            active_draft_handler,
+            head,
+            store=active_store,
+            settings=active_settings,
+        )
+        active_store.append_event("draft.now", {"head": head or "main"})
+        return JSONResponse({"accepted": True}, status_code=202)
 
     return application
 

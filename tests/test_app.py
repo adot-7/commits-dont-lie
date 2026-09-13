@@ -56,6 +56,12 @@ async def noop_push_handler(_push_id, *, store):
     del store
 
 
+async def noop_draft_handler(_head, *, store, settings):
+    """Keep draft-now endpoint tests external-service free."""
+
+    del store, settings
+
+
 async def request(app, method: str, path: str, **kwargs) -> httpx.Response:
     """Exercise the ASGI app without the environment's sync TestClient threadpool."""
 
@@ -140,3 +146,22 @@ def test_slack_interaction_acknowledges_valid_signature(tmp_path):
     )
     assert response.status_code == 200
     assert response.content == b""
+
+
+def test_draft_now_requires_admin_token_and_acknowledges_valid_request(tmp_path):
+    """Manual drafting is protected and returns 202 after scheduling work."""
+
+    settings = make_settings(tmp_path)
+    store = Store(tmp_path / "cdl.sqlite")
+    application = create_app(
+        settings=settings,
+        store=store,
+        draft_handler=noop_draft_handler,
+    )
+    unauthorized = asyncio.run(request(application, "POST", "/draft-now"))
+    authorized = asyncio.run(
+        request(application, "POST", "/draft-now?head=" + "b" * 40, headers={"Authorization": "Bearer admin"})
+    )
+    assert unauthorized.status_code == 401
+    assert authorized.status_code == 202
+    assert authorized.json()["accepted"] is True
