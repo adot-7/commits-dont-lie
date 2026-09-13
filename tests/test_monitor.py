@@ -22,14 +22,17 @@ def settings(tmp_path: Path) -> Settings:
 class FakeNotion:
     """Notion mirror double."""
 
-    def __init__(self):
+    def __init__(self, error: str | None = None):
         self.calls = []
+        self.error = error
 
     def update_post_row(self, *args, **kwargs):
         self.calls.append(("update", args, kwargs))
 
     def create_post_row(self, *args, **kwargs):
         self.calls.append(("create", args, kwargs))
+        if self.error:
+            raise RuntimeError(self.error)
         return "notion-correction"
 
 
@@ -73,6 +76,28 @@ def test_removed_receipt_creates_stale_correction_and_thread(tmp_path):
     assert correction["text"].startswith("Correction to post #")
     assert slack.calls[0][1]["channel"] == "C123"
     assert any(call[0] == "update" and call[2]["status"] == "Stale" for call in notion.calls)
+    assert notion.calls[0][0] == "create"
+    assert notion.calls[1][2]["superseded_by"] == "notion-correction"
+
+
+def test_notion_failure_keeps_stale_status_and_posts_thread(tmp_path):
+    """A failed Notion mirror cannot erase the local stale correction or Slack reply."""
+
+    store = Store(tmp_path / "db.sqlite")
+    post_id = sent_post(store)
+    notion = FakeNotion(error="validation_error")
+    slack = FakeSlack()
+    diff = DiffContext("repo", "b" * 40, "c" * 40, files=[FileChange("cdl/app.py", "modified", removed=[(10, "def handle_push():")])])
+
+    corrections = run(diff, settings=settings(tmp_path), store=store, notion=notion, slack=slack)
+
+    original = store.get_post(post_id)
+    assert corrections
+    assert original["status"] == "Stale"
+    assert original["error"] == "notion: validation_error"
+    assert len(slack.calls) == 1
+    events = store._connect().execute("SELECT kind FROM events WHERE post_id=?", (post_id,)).fetchall()
+    assert any(row["kind"] == "notion.failed" for row in events)
 
 
 def test_unchanged_receipt_is_only_checked(tmp_path):
