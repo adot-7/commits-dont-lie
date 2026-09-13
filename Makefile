@@ -3,7 +3,7 @@
 PYTHON ?= python3
 
 serve:
-	$(PYTHON) -m uvicorn cdl.app:app --host 127.0.0.1 --port 8000 --reload
+	$(PYTHON) -m cdl serve
 
 test:
 	$(PYTHON) -m pytest -q
