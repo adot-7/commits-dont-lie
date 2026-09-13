@@ -38,7 +38,9 @@ class FakeMessages:
         self.responses = list(responses)
         self.calls = []
 
-    def create(self, **kwargs):
+    def create(self, *, temperature=None, **kwargs):
+        if temperature is not None:
+            kwargs["temperature"] = temperature
         self.calls.append(kwargs)
         return self.responses.pop(0)
 

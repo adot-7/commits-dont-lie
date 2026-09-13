@@ -16,6 +16,7 @@ INTEGRATION_ALIASES: dict[str, list[str]] = {
     "slack": ["slack", "slack_sdk", "xo" + "xb"],
     "notion": ["notion", "nt" + "n_", "data_source"],
     "github": ["github", "x-hub-signature", "x-github"],
+    "webhook": ["webhook", "x-hub-signature", "x-github-delivery"],
     "anthropic": ["anthropic", "claude"],
     "sqlite": ["sqlite", "sqlite3"],
     "caddy": ["caddy", "caddyfile"],
@@ -79,10 +80,19 @@ def match_symbol(entity: str, diff: DiffContext) -> list[Evidence]:
 
 
 def _integration_tokens(entity: str) -> list[str]:
-    """Return the configured aliases for an integration entity."""
+    """Return the raw entity and aliases for matching integration keys.
+
+    Compound names such as ``GitHub webhooks`` can refer to more than one
+    configured integration, so each key contained in the entity contributes
+    its aliases in deterministic table order.
+    """
 
     lowered = entity.lower()
-    return INTEGRATION_ALIASES.get(lowered, [lowered])
+    tokens = [lowered]
+    for key, aliases in INTEGRATION_ALIASES.items():
+        if key in lowered:
+            tokens.extend(aliases)
+    return list(dict.fromkeys(tokens))
 
 
 def match_integration(entity: str, diff: DiffContext) -> list[Evidence]:

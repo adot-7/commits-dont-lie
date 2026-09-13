@@ -99,8 +99,27 @@ def test_integration_matches_added_line():
     assert verdict.evidence[0].line_no == 8
 
 
+def test_compound_github_webhooks_matches_github_alias():
+    verdict = claim_vs_diff(
+        claim("Wired GitHub webhooks", Entities(integrations=["GitHub webhooks"])),
+        mk_diff(file("cdl/app.py", added=[(8, 'path = "/webhook/github"')])),
+    )
+    assert verdict.status == "SUPPORTED"
+    assert verdict.evidence[0].line_no == 8
+
+
+def test_compound_anthropic_sdk_matches_anthropic_alias():
+    verdict = claim_vs_diff(
+        claim("Added Anthropic SDK", Entities(integrations=["Anthropic SDK"])),
+        mk_diff(file("cdl/llm.py", added=[(8, "import anthropic")])),
+    )
+    assert verdict.status == "SUPPORTED"
+    assert verdict.evidence[0].line_no == 8
+
+
 def test_alias_table_is_normative():
     assert INTEGRATION_ALIASES["github"] == ["github", "x-hub-signature", "x-github"]
+    assert INTEGRATION_ALIASES["webhook"] == ["webhook", "x-hub-signature", "x-github-delivery"]
     assert INTEGRATION_ALIASES["fastapi"] == ["fastapi", "uvicorn"]
 
 
