@@ -2,6 +2,14 @@
 
 Newest first. Who decided, when, and why in one line.
 
+- **2026-10-26 · Akash · Name: "Shakira | Commits Don't Lie"; CLI command `shakira`.** Matches
+  the demo video title. The Python package stays `cdl` so the deployed `python -m cdl serve`
+  unit keeps working; `cdl` stays as a command alias.
+- **2026-10-26 · Akash · Direction: "Something else".**
+- **2026-10-26 · Akash · The demo video is the README's entry point; the README does not
+  narrate project history.** The earlier submission lives on branch `lemma-hackathon`.
+- **2026-10-26 · Claude · Symbols also match through an enclosing definition.** Live runs
+  blocked true "fixed X" sentences when only X's body changed; eval held at 28/30.
 - **2026-10-26 · Claude · One `llm.call` event per logical call, with tokens summed across its
   internal retries.** A length-exhausted first attempt still counts; per-HTTP events would need
   the store inside the client.

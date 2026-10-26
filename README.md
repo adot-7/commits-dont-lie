@@ -1,56 +1,77 @@
-# Commits Don't Lie
+# Shakira | Commits Don't Lie
 
 *Shakira knows hips don't lie. We checked — neither do commits.*
 
+[![Watch the 2-minute demo](https://img.youtube.com/vi/zolODgOZ-uM/maxresdefault.jpg)](https://youtu.be/zolODgOZ-uM)
+
+**▶ [Watch the 2-minute demo](https://youtu.be/zolODgOZ-uM)**: a real note over-claims, the gate
+blocks that sentence, the fixed draft lands in Slack with receipts, approval re-checks the code,
+and a published post turns *Stale* with a threaded correction after the function it cited is
+renamed. GitHub, Notion and Slack, end to end.
+
 > Every build-in-public tool drafts a post that sounds like you. None of them check whether
-> it's true. This one does, and it keeps checking after you hit send.
+> it's true. Shakira does, and it keeps checking after you hit send.
 
-**Model calls run on [BharatCode](https://bharatcode.ai/build)** (`qwen-3.8-27b`). Entered in
-BharatCode Build League, Round 1 · direction: *Coding & developer tools* · [`BharatCode.txt`](BharatCode.txt)
-
-<!-- TODO(live): replace this illustration with an excerpt of a real run before merging. -->
-```
-You wrote:   "Added rate limiting to the webhook and cleaned up the Slack client."
-Your diff:   touched cdl/app.py and cdl/slack_client.py. No rate limiter anywhere.
-CDL:         ⛔ blocked: the post claims something your commits never did.
-```
+Model calls run on **[BharatCode](https://bharatcode.ai/build)** (`qwen-3.8-27b`) ·
+BharatCode Build League, Round 1 · [`BharatCode.txt`](BharatCode.txt) ·
+**Live dashboard:** https://commitsdontlie.akashparashar.dev
 
 ---
 
+## What it does
+
+You push code and write a note about what you did. Shakira drafts the build-in-public post in
+your voice, then checks **every sentence against the actual diff**:
+
+> Every file, function, or integration a sentence names must appear in the diff, or the
+> sentence doesn't ship.
+
+| Verdict | Meaning |
+|---|---|
+| ✅ SUPPORTED | every named thing was found in the diff; `file:line` receipts attached |
+| ⛔ UNSUPPORTED | a named thing is missing from the diff → sentence blocked, reason shown |
+| ❔ UNVERIFIABLE | names nothing checkable (pure voice) → allowed, max one per post, labelled |
+
+Approved posts go to Slack for one-tap approval and a hand-off to X. After that, **every
+future push re-checks every published post**. If the code a post cited is removed or renamed,
+the post is flagged *Stale* and a correction is threaded under the original message.
+
 ## Try it in 60 seconds
 
-You need Python 3.12+, a git repo, and a BharatCode API key from
-[bharatcode.ai/account](https://bharatcode.ai/account). Students with a `.edu.in` / `.ac.in`
-email get free access.
+No GitHub app, no Notion, no Slack. You need Python 3.12+, a git repo, and a BharatCode API key
+from [bharatcode.ai/account](https://bharatcode.ai/account) (free for students).
 
 ```bash
 pip install git+https://github.com/adot-7/commits-dont-lie
 export BHARATCODE_API_KEY=bc_live_...
 
 cd your-project
-cdl check -n 3 "Your post about the last three commits goes here."
-cdl draft -n 5 --note "what you think you shipped this week"
+shakira check -n 3 "Your post about the last three commits goes here."
+shakira draft -n 5 --note "what you think you shipped this week"
 ```
 
-`cdl check` marks every sentence ✅ supported (with file:line receipts), ⛔ unsupported (with
-the name it could not find), or ❔ unverifiable (pure voice, at most one per post). It exits
-**1** if any sentence would not ship, so it works as a pre-push hook or a CI step.
-`cdl draft` writes the post from your commits first, then runs the same check on it.
+A real run on this repository's commit `d1cade1`, unedited:
 
-<!-- TODO(live): paste a real `cdl check` run on this repo here, unedited, before merging to main. -->
+```text
+$ shakira check -r d1cade1~1..d1cade1 "compare() now matches its own definition in cdl/grounding/check.py, with a regression test in tests/test_check.py. Also added response caching to cdl/slack_client.py. That one regex cost me two eval runs."
+adot-7/commits-dont-lie 52dd0a8..d1cade1 · 1 commit · 2 files
 
-## Why
+✅ "compare() now matches its own definition in cdl/grounding/check.py, with a regression test in tests/test_check.py." → cdl/grounding/check.py (cdl/grounding/check.py), tests/test_check.py (tests/test_check.py), cdl/grounding/check.py:78 (compare()), tests/test_check.py:263 (compare())
+⛔ "Also added response caching to cdl/slack_client.py." → missing: cdl/slack_client.py
+❔ "That one regex cost me two eval runs." → no checkable claim
 
-People who build in public write "here's what I shipped" posts from memory and intent. Tools
-that automate this draft from commits and optimise for *voice*; none of them check whether
-the draft is *true*. A note that says "wired the dashboard tonight" becomes a post even when
-the dashboard commit never landed. And once a post is out, nobody re-checks it when the code
-it described is deleted next week.
+BLOCKED — 1 sentence(s) would not ship:
+  • Also added response caching to cdl/slack_client.py. ('cdl/slack_client.py' does not appear in the 2 files changed in 52dd0a8..d1cade1.)
+
+What the diff does support:
+  compare() now matches its own definition in cdl/grounding/check.py, with a regression test in tests/test_check.py. That one regex cost me two eval runs.
+```
+
+`shakira check` exits **1** when any sentence would not ship, so it works as a pre-push hook or
+a CI step. `shakira draft` writes the post from your commits first, then runs the same check.
+Add `--json` for a machine-readable report.
 
 ## How it decides
-
-> Every file, function, or integration a sentence names must appear in the diff, or the
-> sentence doesn't ship.
 
 ```mermaid
 flowchart LR
@@ -67,20 +88,14 @@ flowchart LR
 - **The model never decides a verdict.** It does two jobs: draft sentences, and extract the
   names each sentence mentions, both through forced function calls with a JSON schema. A plain
   Python function, [`cdl/grounding/check.py::claim_vs_diff`](cdl/grounding/check.py), matches
-  those names against the diff and attaches `file:line` receipts. Same input, same verdict,
-  every time.
+  those names against the diff and attaches receipts. Same input, same verdict, every time.
 - **The model can't smuggle names in.** Any extracted name that is not literally in the
   sentence is dropped before matching, so a name that happens to be in the diff can't rescue a
   vague sentence.
+- **Edited bodies count.** "Fixed `_symbol_pattern`" is backed when a changed line sits inside
+  `def _symbol_pattern`, even if the `def` line itself didn't change.
 - **One function, two call sites.** The same matcher runs before publishing and, inverted,
-  after it: on every later push, the server re-checks every published post and flags it
-  *Stale* if the code it cited was removed or renamed.
-
-| Verdict | Meaning |
-|---|---|
-| ✅ SUPPORTED | every named thing was found in the diff; receipts attached |
-| ⛔ UNSUPPORTED | a named thing is missing from the diff → sentence blocked, reason shown |
-| ❔ UNVERIFIABLE | names nothing checkable (pure voice) → allowed, max one per post, labelled |
+  after it: did this new push *remove* a receipt an already-published post depends on?
 
 ## How it uses BharatCode
 
@@ -90,12 +105,55 @@ flowchart LR
 | Model | `qwen-3.8-27b` (set `BHARATCODE_MODEL` to change) |
 | Calls | one forced function tool per call: `draft_sentences` and `extract_entities` |
 | Output budget | `finish_reason: length` is never used as a partial answer: retry once with double the budget, then fail loudly |
-| Busy model | 429 / 503 retried with backoff |
-| Audit | every call logs tokens, latency and BharatCode's `x-request-id` to the event log |
+| Errors | 429 / 503 retried with backoff; auth and budget failures are not resent; the CLI exits 2 |
+| Audit | every call logs tokens, latency and BharatCode's `x-request-id` |
 | Code | [`cdl/bharatcode_client.py`](cdl/bharatcode_client.py), [`cdl/llm.py`](cdl/llm.py) |
 
-Anthropic Claude is still supported with `LLM_PROVIDER=anthropic`; that is what the September
-version used.
+Measured on this repo (26 Oct 2026): one extraction is about 600 input tokens and 2–3 seconds;
+a full `shakira draft` of five sentences took 31 seconds. Anthropic Claude also works, with
+`LLM_PROVIDER=anthropic`.
+
+## How we know it works
+
+**Evaluation on BharatCode `qwen-3.8-27b`: 28/30 claims (93.3%), 5/5 staleness cases**
+([`eval/report.md`](eval/report.md), 26 Oct 2026). `make eval` runs the full production path
+(BharatCode extraction → substring guard → `claim_vs_diff`) on
+[30 hand-labelled sentences](eval/cases.jsonl) written against 8 real commits of this repo: per
+commit one true claim, one plausible false claim naming code the commit did not touch, one
+pure-voice sentence, plus 6 adversarial cases (real file in the wrong range, near-miss
+filename, multi-word integration, two entities with one missing, decoy integration, pure
+voice).
+
+| expected \ got | SUPPORTED | UNSUPPORTED | UNVERIFIABLE |
+|---|---|---|---|
+| SUPPORTED | 9 | 0 | 0 |
+| UNSUPPORTED | 1 | 11 | 0 |
+| UNVERIFIABLE | 1 | 0 | 8 |
+
+The two misses, stated plainly: a voice sentence that says "notion api" was matched to the
+commit's Notion changes (arguably correct), and a decoy "Anthropic client" claim matched a
+placeholder string in a test file, because integration names alone are weak receipts. Two
+earlier runs scored 27/30 with identical misses; the third miss was a matcher bug (`compare()`
+written with parentheses) that is now fixed and tested.
+
+- **Offline tests:** `make test`. They cover the diff parser, every verdict rule, every
+  staleness rule (removed file, renamed file, net-removed symbol; a *moved* symbol and a body
+  edit are not stale), the substring guard, forced tool calls for both providers, BharatCode's
+  length / busy / auth handling, local git diffs (merge-base ranges, merges, renames, glob-like
+  file names), the publish gate, approval mid-check, corrections, the dashboard and the eval
+  harness.
+- **Local diffs match GitHub's.** The CLI reads diffs from your local repo; checked against the
+  live GitHub compare API on `40cd3db...4fb4a7b`: 22 commits, 35 files, identical statuses and
+  line numbers.
+- **Live event log:** every external call and every verdict is an append-only event in SQLite.
+  Nothing fails silently: a failed external write marks the post `Errored` with the reason.
+- **Dogfooding:** Shakira checks its own repository. The posts on the live dashboard are real,
+  and the blocked sentences were real over-claims.
+
+**What it does not do.** The check is lexical, not semantic: a sentence can name the right file
+and still mischaracterise what changed inside it. Integration names alone are weak receipts.
+Drift is tracked for the repository's own code only. The service is single repo, single
+channel, single operator.
 
 ## Use it as a gate
 
@@ -105,15 +163,15 @@ Pre-push hook (`.git/hooks/pre-push`, make it executable):
 #!/usr/bin/env bash
 # Block the push if the draft post in POST.md claims something the unpushed commits don't do.
 [ -f POST.md ] || exit 0
-cdl check -r origin/main..HEAD -f POST.md
+shakira check -r origin/main..HEAD -f POST.md
 ```
 
-CI: `cdl check -r "$BASE..$HEAD" -f RELEASE_NOTES.md --json` prints a machine-readable report
-and fails the job on any unsupported sentence.
+CI: `shakira check -r "$BASE..$HEAD" -f RELEASE_NOTES.md --json` fails the job on any
+unsupported sentence. Exit codes: 0 pass, 1 blocked, 2 error.
 
 ## The full service: GitHub → Notion → Slack → X
 
-The CLI is the quickest way in. The original product is a web service that runs on every push:
+This is what the demo video shows: a web service that runs on every push.
 
 | App | Role |
 |---|---|
@@ -122,13 +180,6 @@ The CLI is the quickest way in. The original product is a web service that runs 
 | **Slack** | Drafts arrive with receipts and Approve/Reject buttons; approval re-checks against HEAD; corrections are threaded under the original message. |
 | **BharatCode** | Drafting and entity extraction only. |
 | **X** | After approval, a "Post on X" button opens the compose box prefilled; a human presses Post. |
-
-**▶ Demo (2 min, September version on Claude):** https://youtu.be/zolODgOZ-uM ·
-**Live dashboard:** https://commitsdontlie.akashparashar.dev
-
-The video shows a real note over-claiming, the gate blocking that sentence, the fixed draft
-passing with receipts, approval re-checking HEAD, and a published post going *Stale* with a
-threaded correction after the function it cited was renamed.
 
 <details>
 <summary><b>Service setup</b> (GitHub webhook, Notion databases, Slack app, VM)</summary>
@@ -170,48 +221,11 @@ why and leave the note `Ready`; passing drafts arrive in Slack with receipts. Ap
 "Post on X". Every later push re-checks every Sent post.
 </details>
 
-## How we know it works
-
-<!-- TODO(live): eval numbers from `make eval` on BharatCode, with date, before merging to main. -->
-
-- **Offline tests:** `make test`. They cover the diff parser (hunk-header line numbers), every
-  verdict rule (file / symbol / integration matching, alias expansion, evidence ranking and
-  cap, the UNVERIFIABLE boundary), every staleness rule (removed file, renamed file, net-removed
-  symbol; a *moved* symbol and a body edit are not stale), the substring guard, forced tool-call
-  validation for both providers, BharatCode's length / busy / auth handling, local git diffs
-  (renames, empty-tree ranges), the publish gate, approval mid-check, corrections, the dashboard
-  and the eval harness.
-- **Local diffs match GitHub's.** `cdl/local_git.py` was checked against the live GitHub
-  compare API on `40cd3db...4fb4a7b`: 22 commits, 35 files, identical statuses and added/removed
-  line numbers.
-- **Hand-labelled evaluation set:** [`eval/cases.jsonl`](eval/cases.jsonl). 30 sentences
-  written against 8 real commits of this repo: per commit one true claim, one plausible false
-  claim naming code the commit did not touch, one pure-voice sentence, plus 6 adversarial cases
-  (real file in the wrong range, near-miss filename, multi-word integration, two entities with
-  one missing, decoy integration, pure voice). `make eval` runs the full production path
-  (BharatCode extraction → guard → match) on local diffs and writes a confusion matrix to
-  `eval/report.md`.
-- **Live event log:** every external call and every verdict is an append-only event in SQLite
-  and a JSON line on stdout. Nothing fails silently: a failed external write marks the post
-  `Errored` with the component and reason.
-- **Dogfooding:** the tool was pointed at its own repository while it was being built. The
-  posts on the live dashboard are real, and the blocked sentences were real over-claims.
-
-**What it does not do.** The check is lexical, not semantic: a sentence can name the right file
-and still mischaracterise what changed inside it. Integration names alone are weak receipts.
-Drift is tracked for the repository's own code only. The service is single repo, single
-channel, single operator.
-
-## History
-
-Built solo in one night at the Multi-App AI Agent Hackathon (Lemma × Comma Capital,
-13 Sep 2026); that version is preserved on the
-[`lemma-hackathon`](https://github.com/adot-7/commits-dont-lie/tree/lemma-hackathon) branch.
-For BharatCode Build League it gained the BharatCode provider, the zero-setup CLI and local
-diffs, and a published eval run; details in [`docs/WHAT_CHANGED.md`](docs/WHAT_CHANGED.md).
 Architecture, data contracts and integration call sheets are in [`docs/`](docs/).
 
-If CDL ever stops you from posting something your code doesn't do, a ⭐ helps other people
+---
+
+If Shakira ever stops you from posting something your code doesn't do, a ⭐ helps other people
 find it.
 
 MIT.

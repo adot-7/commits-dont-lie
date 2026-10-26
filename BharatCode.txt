@@ -1,4 +1,4 @@
-Commits Don't Lie — BharatCode Build League, Round 1
+Shakira | Commits Don't Lie — BharatCode Build League, Round 1
 
 What it is
   A harness that drafts build-in-public posts from your git commits and refuses
@@ -6,8 +6,12 @@ What it is
   receipt or gets blocked. After a post is published, every later push re-checks
   it and flags it Stale if the code it cited is removed.
 
+Demo
+  https://youtu.be/zolODgOZ-uM (2 min: GitHub, Notion, Slack, end to end)
+
 Direction
-  Coding & developer tools (CLI + web service).
+  Something else: a developer harness for honest build-in-public posts
+  (CLI + web service with GitHub, Notion, Slack and X).
 
 How it uses BharatCode
   All model calls go to the BharatCode model API by default.
@@ -21,14 +25,13 @@ How it uses BharatCode
   each sentence names. It never decides whether a claim is true. A
   deterministic Python function, cdl/grounding/check.py::claim_vs_diff, makes
   that call by matching the extracted names against the diff.
+  Eval on qwen-3.8-27b: 28/30 claims, 5/5 staleness cases (eval/report.md).
 
 Try it
   pip install git+https://github.com/adot-7/commits-dont-lie
   export BHARATCODE_API_KEY=bc_live_...
   cd any-git-repo
-  cdl check -n 3 "Your post about the last three commits."
+  shakira check -n 3 "Your post about the last three commits."
 
 Author
-  Akash (github.com/adot-7). Originally built at the Multi-App AI Agent
-  Hackathon (13 Sep 2026); the BharatCode integration, local CLI and eval
-  re-run were added for Build League in Oct–Nov 2026. See docs/WHAT_CHANGED.md.
+  Akash (github.com/adot-7)

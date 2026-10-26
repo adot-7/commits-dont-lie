@@ -87,7 +87,7 @@ Repository permissions: Contents **Read-only**, Metadata **Read-only**. → `GIT
 ## 8. Model provider
 **BharatCode (default since Oct 2026):** https://bharatcode.ai/account → developer API key →
 `BHARATCODE_API_KEY` in `/opt/cdl/.env`. `python -m cdl models` lists the model IDs.
-**Upgrading a September VM:** its `.env` has only `ANTHROPIC_API_KEY`, and strict boot now fails
+**Upgrading an Anthropic-only VM:** its `.env` has only `ANTHROPIC_API_KEY`, and strict boot now fails
 with `Missing … BHARATCODE_API_KEY`. Add the BharatCode key before `make deploy`, or set
 `LLM_PROVIDER=anthropic` to keep Claude.
 

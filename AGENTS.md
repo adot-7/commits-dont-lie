@@ -1,6 +1,6 @@
 # AGENTS.md — Commits Don't Lie
 
-You are a coding agent working on **Commits Don't Lie** (CDL). It was built for the Multi-App
+You are a coding agent working on **Shakira | Commits Don't Lie** (CDL; CLI command `shakira`). It was built for the Multi-App
 AI Agent Hackathon (Lemma × Comma Capital, 13 Sep 2026; that version is branch
 `lemma-hackathon`) and is now entered in **BharatCode Build League Round 1** (deadline
 **10 Nov 2026, 11:59 PM IST**). Solo human operator: Akash (`adot-7`). You write the code; he
