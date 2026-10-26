@@ -14,6 +14,7 @@ from typing import Any, Callable, Iterable
 
 from ..config import Settings, get_settings
 from ..github_client import GitHubClient
+from ..local_git import LocalGit
 from ..grounding.check import check_staleness, claim_vs_diff
 from ..llm import extract_entities, filter_entities
 from ..models import Claim, DiffContext, Entities, Evidence, FileChange, Sentence, dataclass_dict
@@ -185,6 +186,9 @@ def render_markdown(report: dict[str, Any]) -> str:
         "",
         f"Accuracy: **{report['correct']}/{report['total']} ({report['accuracy']:.1%})**",
         "",
+        f"Extraction model: `{report.get('provider', 'unknown')}` / `{report.get('model', 'unknown')}`. "
+        "The verdict itself is always the deterministic matcher.",
+        "",
         "## Confusion matrix",
         "",
         "| expected \\ got | " + " | ".join(report["labels"]) + " |",
@@ -271,6 +275,8 @@ def run_eval(
             matcher_verdict = claim_vs_diff(Claim(sentence, _entities_from_case(case["entities"])), diff)
             matcher_rows.append({"id": case["id"], "expected": case["expected"], "got": matcher_verdict.status, "reason": matcher_verdict.reason})
     report = _metrics(full_rows)
+    report["provider"] = active_settings.llm_provider
+    report["model"] = active_settings.llm_model
     report["misses"] = [row for row in full_rows if row["expected"] != row["got"]]
     if matcher_rows:
         matcher_report = _metrics(matcher_rows)
@@ -321,15 +327,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cache-dir", default="eval/cache")
     parser.add_argument("--report-json", default="eval/report.json")
     parser.add_argument("--report-md", default="eval/report.md")
+    parser.add_argument("--local-repo", help="read diffs from this local git repository instead of the GitHub API")
     args = parser.parse_args(argv)
     try:
+        github = LocalGit(args.local_repo) if args.local_repo else None
         report = run_eval(
             cases_path=args.cases,
             stale_cases_path=args.stale_cases,
             cache_dir=args.cache_dir,
             report_json=args.report_json,
             report_md=args.report_md,
-            settings=get_settings(strict=True),
+            github=github,
+            settings=get_settings(strict=github is None),
         )
     except Exception as exc:
         print(f"eval failed: {exc}")

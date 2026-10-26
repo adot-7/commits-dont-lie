@@ -9,7 +9,7 @@ test:
 	$(PYTHON) -m pytest -q
 
 eval:
-	$(PYTHON) -m cdl eval
+	$(PYTHON) -m cdl eval --local-repo .
 
 # abort a commit if a secret is staged
 secrets:

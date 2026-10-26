@@ -29,6 +29,7 @@ def build_parser() -> argparse.ArgumentParser:
     eval_parser.add_argument("--cache-dir", default="eval/cache")
     eval_parser.add_argument("--report-json", default="eval/report.json")
     eval_parser.add_argument("--report-md", default="eval/report.md")
+    eval_parser.add_argument("--local-repo", help="read diffs from a local git repository instead of the GitHub API")
     subparsers.add_parser("resolve-notion-ids", help="resolve Notion database data-source IDs")
     subparsers.add_parser("models", help="list model IDs for the configured provider")
     compare = subparsers.add_parser("dump-compare", help="dump a GitHub compare response as JSON")
@@ -189,6 +190,7 @@ def main(argv: list[str] | None = None) -> int:
             "--cache-dir", args.cache_dir,
             "--report-json", args.report_json,
             "--report-md", args.report_md,
+            *(["--local-repo", args.local_repo] if args.local_repo else []),
         ])
     # Later milestones replace these placeholders with service dispatch.
     if args.command in {"draft-now", "replay", "eval", "resolve-notion-ids", "models", "dump-compare", "resync"}:
