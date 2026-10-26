@@ -17,8 +17,9 @@ import sys
 def build_parser() -> argparse.ArgumentParser:
     """Build the stable CLI command surface described by the architecture spec."""
 
-    prog = "cdl" if os.path.basename(sys.argv[0]) == "cdl" else "python -m cdl"
-    parser = argparse.ArgumentParser(prog=prog, description="Commits Don't Lie")
+    command = os.path.basename(sys.argv[0])
+    prog = command if command in {"shakira", "cdl"} else "python -m cdl"
+    parser = argparse.ArgumentParser(prog=prog, description="Shakira | Commits Don't Lie")
     subparsers = parser.add_subparsers(dest="command")
     subparsers.add_parser("serve", help="run the FastAPI server")
     draft = subparsers.add_parser("draft-now", help="draft from the current or supplied HEAD")

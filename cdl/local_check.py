@@ -1,6 +1,6 @@
 """Zero-setup check and draft for a local repository.
 
-This module owns the ``cdl check`` and ``cdl draft`` flows: split a post into
+This module owns the ``shakira check`` and ``shakira draft`` flows: split a post into
 sentences, extract entities with the model, apply the substring guard, and run
 the same ``claim_vs_diff`` and publish gate the server uses. It needs only a
 model key; it must not decide support outside ``grounding.check``.

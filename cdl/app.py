@@ -118,7 +118,7 @@ def create_app(
     active_store = store or Store(active_settings.database_path)
     active_push_handler = push_handler or handle_push
     active_draft_handler = draft_handler or _draft_now_background
-    application = FastAPI(title="Commits Don't Lie")
+    application = FastAPI(title="Shakira | Commits Don't Lie")
     templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
     application.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
     application.state.settings = active_settings

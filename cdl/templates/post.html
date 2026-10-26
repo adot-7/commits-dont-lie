@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Post #{{ post.id }} · Commits Don't Lie{% endblock %}
+{% block title %}Post #{{ post.id }} · Shakira | Commits Don't Lie{% endblock %}
 {% block content %}
 <p class="back"><a href="/">← all posts</a></p>
 {% if post.status == 'Stale' %}<div class="alert alert-warn"><strong>⚠️ Stale.</strong> Evidence changed after this post was sent.{% if correction %} <a href="/posts/{{ correction.id }}">View correction #{{ correction.id }}</a>.{% endif %}</div>{% endif %}
