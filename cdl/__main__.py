@@ -58,13 +58,17 @@ def build_parser() -> argparse.ArgumentParser:
 def _local_command(args: argparse.Namespace) -> int:
     """Run ``check`` or ``draft`` against a local repository with only a model key."""
 
-    from .config import PROVIDER_KEY_VARS, load_settings
+    from .config import PROVIDER_KEY_VARS, ConfigError, load_settings
     from .local_check import as_json, check_sentences, draft_and_check, render, split_sentences
     from .llm import LLMError
     from .local_git import LocalGit, LocalGitError
     from .store import Store
 
-    settings = load_settings(strict=False)
+    try:
+        settings = load_settings(strict=False)
+    except ConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     key_var = PROVIDER_KEY_VARS[settings.llm_provider]
     key = settings.bharatcode_api_key if settings.llm_provider == "bharatcode" else settings.anthropic_api_key
     if not key:
@@ -84,7 +88,11 @@ def _local_command(args: argparse.Namespace) -> int:
     store = Store(db_path, echo=sys.stderr if args.verbose else None)
     if args.command == "check":
         if args.file:
-            text = sys.stdin.read() if args.file == "-" else open(args.file, encoding="utf-8").read()
+            try:
+                text = sys.stdin.read() if args.file == "-" else open(args.file, encoding="utf-8").read()
+            except OSError as exc:
+                print(f"error: cannot read {args.file}: {exc.strerror}", file=sys.stderr)
+                return 2
         elif args.text:
             text = args.text
         elif not sys.stdin.isatty():

@@ -97,3 +97,64 @@ def test_check_blocks_the_false_claim_and_keeps_receipts(tmp_path):
     report = render(result, diff)
     assert "app.py:5 (verify_signature)" in report and "BLOCKED" in report
     assert as_json(result, diff)["failures"][0]["text"] == "I also added rate_limit."
+
+
+def test_range_diffs_from_merge_base_not_main_tip(tmp_path):
+    repo = make_repo(tmp_path)
+    git(repo, "branch", "-M", "main")
+    git(repo, "switch", "-q", "-c", "feat")
+    (repo / "feat.py").write_text("x = 1\n")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "feat")
+    git(repo, "switch", "-q", "main")
+    (repo / "mainonly.py").write_text("y = 1\n")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "main moves on")
+    local = LocalGit(repo)
+    for spec in ("main..feat", "main...feat"):
+        diff = local.compare(*local.parse_range(spec))
+        assert [(item.path, item.status) for item in diff.files] == [("feat.py", "added")]
+        assert [commit.message for commit in diff.commits] == ["feat"]
+
+
+def test_last_commit_of_a_merge_follows_first_parent(tmp_path):
+    repo = make_repo(tmp_path)
+    git(repo, "branch", "-M", "main")
+    git(repo, "switch", "-q", "-c", "side")
+    (repo / "side.py").write_text("s = 1\n")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "side", "--date=2030-01-01T00:00:00")
+    git(repo, "switch", "-q", "main")
+    git(repo, "merge", "-q", "--no-ff", "side", "-m", "merge side")
+    local = LocalGit(repo)
+    diff = local.compare(*local.last_n(1))
+    assert [item.path for item in diff.files] == ["side.py"]
+
+
+def test_glob_characters_in_paths_are_literal(tmp_path):
+    repo = make_repo(tmp_path)
+    (repo / "a[1].txt").write_text("bracket\n")
+    (repo / "a1.txt").write_text("plain\n")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "globs")
+    local = LocalGit(repo)
+    files = {item.path: item for item in local.compare(*local.last_n(1)).files}
+    assert files["a[1].txt"].added == [(1, "bracket")]
+    assert files["a1.txt"].added == [(1, "plain")]
+
+
+def test_remote_credentials_never_reach_the_repo_name(tmp_path):
+    repo = make_repo(tmp_path)
+    git(repo, "remote", "add", "origin", "https://oauth2:glpat-SECRET@gitlab.com/team/proj.git")
+    assert LocalGit(repo).repo_name() == "gitlab.com/team/proj"
+    git(repo, "remote", "set-url", "origin", "git@github.com:adot-7/commits-dont-lie.git")
+    assert LocalGit(repo).repo_name() == "adot-7/commits-dont-lie"
+
+
+def test_zero_commits_is_rejected(tmp_path):
+    import pytest
+
+    from cdl.local_git import LocalGitError
+
+    with pytest.raises(LocalGitError, match="at least 1"):
+        LocalGit(make_repo(tmp_path)).last_n(0)

@@ -8,6 +8,7 @@ modify the repository or decide a verdict.
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -32,7 +33,7 @@ class LocalGit:
         """Run one read-only git command and return stdout."""
 
         result = subprocess.run(
-            ["git", "-C", str(self.repo_dir), *args],
+            ["git", "--literal-pathspecs", "-C", str(self.repo_dir), *args],
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -54,8 +55,13 @@ class LocalGit:
             url = self._git("remote", "get-url", "origin").strip()
         except LocalGitError:
             return Path(self._git("rev-parse", "--show-toplevel").strip()).name
-        name = url.rstrip("/").removesuffix(".git")
-        return name.split(":")[-1].split("github.com/")[-1]
+        if "://" in url:
+            rest = re.sub(r"^[^/@]+@", "", url.split("://", 1)[1])  # drop user:token@
+        else:
+            host, _, path = url.partition(":")  # scp form: git@host:owner/repo
+            rest = f"{host.rsplit('@', 1)[-1]}/{path}"
+        rest = rest.rstrip("/").removesuffix(".git")
+        return rest.removeprefix("github.com/")
 
     def resolve(self, ref: str) -> str:
         """Resolve a ref to a full commit SHA."""
@@ -63,20 +69,30 @@ class LocalGit:
         return self._git("rev-parse", "--verify", f"{ref}^{{commit}}").strip()
 
     def last_n(self, count: int, head: str = "HEAD") -> tuple[str, str]:
-        """Return a (base, head) range covering the last ``count`` commits."""
+        """Return a (base, head) range covering the last ``count`` first-parent commits."""
 
+        if count < 1:
+            raise LocalGitError("the number of commits must be at least 1")
         head_sha = self.resolve(head)
-        shas = self._git("rev-list", f"--max-count={count + 1}", head_sha).split()
+        shas = self._git("rev-list", "--first-parent", f"--max-count={count + 1}", head_sha).split()
         base = shas[count] if len(shas) > count else EMPTY_TREE
         return base, head_sha
 
     def parse_range(self, spec: str) -> tuple[str, str]:
-        """Resolve ``A..B`` (or a single ref meaning its parent..ref)."""
+        """Resolve ``A..B`` or ``A...B`` (or a single ref meaning its parent..ref)."""
 
         if ".." in spec:
-            base, head = spec.split("..", 1)
+            base, head = spec.split("...", 1) if "..." in spec else spec.split("..", 1)
             return self.resolve(base or "HEAD"), self.resolve(head or "HEAD")
         return self.last_n(1, spec)
+
+    def _merge_base(self, base: str, head: str) -> str:
+        """Diff from where the branches split, like GitHub's ``base...head`` compare."""
+
+        try:
+            return self._git("merge-base", base, head).strip()
+        except LocalGitError:
+            return base
 
     def _commits(self, base: str, head: str) -> list[CommitMeta]:
         """Return commits in the range, oldest first, like GitHub compare."""
@@ -104,7 +120,7 @@ class LocalGit:
         """Build a ``DiffContext`` for ``base..head`` from the local repository."""
 
         head_sha = self.resolve(head)
-        base_sha = base if base == EMPTY_TREE else self.resolve(base)
+        base_sha = base if base == EMPTY_TREE else self._merge_base(self.resolve(base), head_sha)
         raw = self._git("diff", "--name-status", "-z", "-M", base_sha, head_sha)
         tokens = raw.split("\0")
         files: list[FileChange] = []

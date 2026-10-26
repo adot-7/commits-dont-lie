@@ -12,9 +12,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 try:
-    from dotenv import load_dotenv
+    from dotenv import find_dotenv, load_dotenv
 except ImportError:  # pragma: no cover - dependency is listed in requirements
-    load_dotenv = None
+    find_dotenv = load_dotenv = None
 
 
 DEFAULT_MODEL = "claude-sonnet-5"
@@ -98,7 +98,7 @@ def load_settings(*, strict: bool = True, dotenv_path: str | Path | None = None)
     """
 
     if load_dotenv is not None:
-        load_dotenv(dotenv_path=dotenv_path, override=False)
+        load_dotenv(dotenv_path=dotenv_path or find_dotenv(usecwd=True), override=False)
 
     provider = (_env("LLM_PROVIDER", DEFAULT_PROVIDER) or DEFAULT_PROVIDER).lower()
     if provider not in PROVIDER_KEY_VARS:

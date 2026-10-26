@@ -2,6 +2,14 @@
 
 Newest first. Who decided, when, and why in one line.
 
+- **2026-10-26 · Claude · One `llm.call` event per logical call, with tokens summed across its
+  internal retries.** A length-exhausted first attempt still counts; per-HTTP events would need
+  the store inside the client.
+- **2026-10-26 · Claude · Retry 429 like 503.** The vendor page names only 503; backing off on a
+  rate limit is the conservative reading.
+- **2026-10-26 · Claude · Local ranges diff from the merge-base, `-n` follows first parents.**
+  Matches GitHub's `base...head` compare, so a branch is judged on its own commits only.
+
 - **2026-10-26 · Akash · Submit CDL to BharatCode Build League Round 1.** Old repos are allowed
   (Discord answer, 22 Oct 2026); the repo needs `BharatCode.txt` in the root and must work with
   the BharatCode API.

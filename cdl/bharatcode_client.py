@@ -135,6 +135,7 @@ class BharatCodeClient:
         """
 
         budget = max_tokens
+        spent_input = spent_output = 0
         for attempt in range(2):
             payload: dict[str, Any] = {
                 "model": self.model,
@@ -152,13 +153,17 @@ class BharatCodeClient:
                 raise ValueError(f"response has no choices request_id={request_id or '-'}")
             choice = choices[0]
             usage = body.get("usage") or {}
-            input_tokens = int(usage.get("prompt_tokens", 0) or 0)
-            output_tokens = int(usage.get("completion_tokens", 0) or 0)
+            spent_input += int(usage.get("prompt_tokens", 0) or 0)
+            spent_output += int(usage.get("completion_tokens", 0) or 0)
+            input_tokens, output_tokens = spent_input, spent_output
             if choice.get("finish_reason") == "length":
                 if attempt == 0 and budget < MAX_OUTPUT_TOKENS:
                     budget = min(budget * 2, MAX_OUTPUT_TOKENS)
                     continue
-                raise BharatCodeError(f"output budget of {budget} tokens exhausted request_id={request_id or '-'}")
+                raise BharatCodeError(
+                    f"output budget of {budget} tokens exhausted request_id={request_id or '-'} "
+                    f"(spent {spent_input} input / {spent_output} output tokens)"
+                )
             message = choice.get("message") or {}
             for call in message.get("tool_calls") or []:
                 function = call.get("function") or {}

@@ -84,14 +84,20 @@ Repository permissions: Contents **Read-only**, Metadata **Read-only**. → `GIT
 5. Interactivity & Shortcuts → toggle **On** → Request URL
    `https://commitsdontlie.akashparashar.dev/slack/interactions` → Save. (After §4 is live.)
 
-## 8. Anthropic
-platform.claude.com → API keys → create → `ANTHROPIC_API_KEY`. Buy $5 credits. Verify model id
-with `python -m cdl models`.
+## 8. Model provider
+**BharatCode (default since Oct 2026):** https://bharatcode.ai/account → developer API key →
+`BHARATCODE_API_KEY` in `/opt/cdl/.env`. `python -m cdl models` lists the model IDs.
+**Upgrading a September VM:** its `.env` has only `ANTHROPIC_API_KEY`, and strict boot now fails
+with `Missing … BHARATCODE_API_KEY`. Add the BharatCode key before `make deploy`, or set
+`LLM_PROVIDER=anthropic` to keep Claude.
+
+**Anthropic (`LLM_PROVIDER=anthropic`):** platform.claude.com → API keys → create →
+`ANTHROPIC_API_KEY`. Verify model id with `python -m cdl models`.
 
 ## 9. Sanity sequence once everything is set
 ```bash
 python -m cdl resolve-notion-ids      # prints DS ids
-python -m cdl models                  # confirms ANTHROPIC_MODEL exists
+python -m cdl models                  # lists model IDs for the configured provider
 curl -X POST https://…/draft-now -H "Authorization: Bearer $ADMIN_TOKEN"   # after M3
 ```
 Then: write a note in Notion, set `Ready`, `git commit --allow-empty -m "test: webhook" && git push`,
