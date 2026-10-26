@@ -90,6 +90,10 @@ def check_staleness(evidence: list[Evidence], diff: DiffContext) -> StaleVerdict
 - **file** entity matches if `entity == f.path` or `entity == basename(f.path)` (unique) for any
   `f` in `diff.files` with status ≠ `removed`. Evidence: `kind=file, path, line_no=None`.
 - **symbol** entity matches if regex `\b<escaped entity>\b` hits any `added` line in any file.
+  A trailing `()` is dropped before matching. If a file has no such added line, the symbol
+  still matches when a changed line sits inside a definition naming it: the nearest preceding
+  `def`/`class`/`function`/`func`/`fn` line in the hunk (context or added), else the hunk's
+  section heading (`grounding.check.changed_scopes`). Receipt: that definition line.
   Evidence: first hit per file (path, line_no, line_text). Case-sensitive.
 - **integration** entity matches if `entity.lower()` appears in any `added` line (lowercased)
   **or** in any changed file's path (lowercased). Aliases in `INTEGRATION_ALIASES`

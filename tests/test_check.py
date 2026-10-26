@@ -265,3 +265,39 @@ def test_symbol_with_call_parens_matches_its_definition():
     )
     assert verdict.status == "SUPPORTED"
     assert verdict.evidence[0].line_no == 143
+
+
+BODY_EDIT_PATCH = """@@ -73,9 +73,11 @@ def match_file(entity: str, diff: DiffContext) -> list[Evidence]:
+     return _file_evidence(entity, diff.files)
+ 
+ 
+ def _symbol_pattern(entity: str) -> re.Pattern[str]:
+     \"\"\"Compile the pattern.\"\"\"
+ 
+-    return re.compile(entity)
++    name = entity[:-2] if entity.endswith("()") else entity
++    return re.compile(name)
+@@ -120,3 +122,4 @@ def match_symbol(entity: str, diff: DiffContext) -> list[Evidence]:
+     pattern = _symbol_pattern(entity)
++    matches = []
+     for file in files:"""
+
+
+def test_edited_body_is_a_receipt_for_its_enclosing_definition():
+    from cdl.github_client import parse_patch
+
+    added, removed = parse_patch(BODY_EDIT_PATCH)
+    diff = mk_diff(FileChange("cdl/grounding/check.py", "modified", None, BODY_EDIT_PATCH, added, removed))
+    verdict = claim_vs_diff(claim("Fixed _symbol_pattern", Entities(symbols=["_symbol_pattern"])), diff)
+    assert verdict.status == "SUPPORTED"
+    assert (verdict.evidence[0].line_no, verdict.evidence[0].line_text) == (76, "def _symbol_pattern(entity: str) -> re.Pattern[str]:")
+
+
+def test_hunk_heading_is_the_scope_when_no_definition_precedes_the_change():
+    from cdl.github_client import parse_patch
+
+    added, removed = parse_patch(BODY_EDIT_PATCH)
+    diff = mk_diff(FileChange("cdl/grounding/check.py", "modified", None, BODY_EDIT_PATCH, added, removed))
+    assert claim_vs_diff(claim("Tidied match_symbol", Entities(symbols=["match_symbol"])), diff).status == "SUPPORTED"
+    # match_file only heads a hunk whose changes sit inside _symbol_pattern, so it is not a receipt.
+    assert claim_vs_diff(claim("Rewrote match_file", Entities(symbols=["match_file"])), diff).status == "UNSUPPORTED"

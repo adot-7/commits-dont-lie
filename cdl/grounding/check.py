@@ -27,6 +27,8 @@ INTEGRATION_ALIASES: dict[str, list[str]] = {
 NO_ENTITIES_REASON = "Names no file, function, or integration that can be checked against the diff."
 MAX_EVIDENCE_PER_ENTITY = 3
 _EVIDENCE_EXTENSIONS = (".py", ".js", ".ts", ".html", ".css", ".toml", ".cfg", ".service")
+_HUNK_HEADER = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@ ?(.*)$")
+_DEFINITION = re.compile(r"^\s*(?:export\s+)?(?:async\s+)?(?:def|class|function|func|fn)\s+\w")
 
 
 def _basename(path: str) -> str:
@@ -83,24 +85,54 @@ def _symbol_pattern(entity: str) -> re.Pattern[str]:
     return re.compile(r"\b" + re.escape(name) + r"\b")
 
 
+def changed_scopes(patch: str | None) -> list[tuple[int, str]]:
+    """Return the definition lines that enclose changed lines in a patch.
+
+    Within each hunk the scope is the nearest preceding ``def``/``class``/
+    ``function``/``func``/``fn`` line (context or added), falling back to the
+    section heading git writes after the hunk header. Each scope is listed once,
+    with its new-file line number (the hunk start for a heading).
+    """
+
+    if patch is None:
+        return []
+    scopes: list[tuple[int, str]] = []
+    scope: tuple[int, str] | None = None
+    new_line: int | None = None
+    for line in patch.splitlines():
+        hunk = _HUNK_HEADER.match(line)
+        if hunk:
+            new_line = int(hunk.group(1))
+            heading = hunk.group(2).strip()
+            scope = (new_line, heading) if heading else None
+            continue
+        if new_line is None or line.startswith("\\"):
+            continue
+        marker, body = line[:1], line[1:]
+        if marker in {" ", "+"} and _DEFINITION.match(body):
+            scope = (new_line, body)
+        if marker in {"+", "-"} and scope is not None and scope not in scopes:
+            scopes.append(scope)
+        if marker in {" ", "+"}:
+            new_line += 1
+    return scopes
+
+
 def match_symbol(entity: str, diff: DiffContext) -> list[Evidence]:
-    """Find the first added occurrence per changed file for a symbol."""
+    """Find the first added occurrence per changed file for a symbol.
+
+    A file with no added line naming the symbol can still hold a receipt when a
+    changed line sits inside a definition that names it (an edited body).
+    """
 
     pattern = _symbol_pattern(entity)
     matches: list[Evidence] = []
     for file in _ordered_files(diff.files):
-        for line_no, line_text in file.added:
-            if pattern.search(line_text):
-                matches.append(
-                    Evidence(
-                        entity=entity,
-                        kind="symbol",
-                        path=file.path,
-                        line_no=line_no,
-                        line_text=line_text,
-                    )
-                )
-                break
+        found = next(((no, text) for no, text in file.added if pattern.search(text)), None)
+        if found is None:
+            found = next(((no, text) for no, text in changed_scopes(file.patch) if pattern.search(text)), None)
+        if found is not None:
+            matches.append(Evidence(entity=entity, kind="symbol", path=file.path, line_no=found[0], line_text=found[1]))
         if len(matches) == MAX_EVIDENCE_PER_ENTITY:
             break
     return matches
