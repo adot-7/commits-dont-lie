@@ -30,7 +30,7 @@ def build_parser() -> argparse.ArgumentParser:
     eval_parser.add_argument("--report-json", default="eval/report.json")
     eval_parser.add_argument("--report-md", default="eval/report.md")
     subparsers.add_parser("resolve-notion-ids", help="resolve Notion database data-source IDs")
-    subparsers.add_parser("models", help="list available Anthropic model IDs")
+    subparsers.add_parser("models", help="list model IDs for the configured provider")
     compare = subparsers.add_parser("dump-compare", help="dump a GitHub compare response as JSON")
     compare.add_argument("base")
     compare.add_argument("head")

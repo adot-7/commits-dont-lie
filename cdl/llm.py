@@ -1,7 +1,7 @@
-"""Anthropic drafting, extraction, and substring filtering for CDL.
+"""Model drafting, extraction, and substring filtering for CDL.
 
-This module owns tool-use calls and the guard that removes extracted names not
-present in the sentence. It must never decide SUPPORTED, UNSUPPORTED, or
+This module owns forced tool calls (BharatCode by default, Anthropic optional)
+and the guard that removes extracted names not present in the sentence. It must never decide SUPPORTED, UNSUPPORTED, or
 UNVERIFIABLE; that decision belongs only to ``grounding.check``.
 """
 
@@ -18,13 +18,14 @@ try:
 except ImportError:  # pragma: no cover - dependency is listed in requirements
     anthropic = None
 
+from .bharatcode_client import BharatCodeClient, ToolResult
 from .config import Settings, get_settings
 from .models import DiffContext, Entities, Note, Sentence
 from .store import Store
 
 
 class LLMError(RuntimeError):
-    """Raised when Anthropic returns malformed tool input after one retry."""
+    """Raised when the model returns malformed tool input after one retry."""
 
 
 MAX_DRAFT_CHARACTERS = 900
@@ -130,18 +131,81 @@ def _store(settings: Settings, store: Store | None) -> Store:
     return store or Store(settings.database_path)
 
 
-def _anthropic_client(settings: Settings, provided: Any | None) -> Any:
-    """Build an Anthropic client only when a real call is requested."""
+class AnthropicToolCaller:
+    """Adapt an Anthropic SDK client to the provider-neutral ``call_tool`` shape."""
 
-    if provided is not None:
-        return provided
-    if anthropic is None:
-        raise LLMError("anthropic package is not installed")
-    return anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    def __init__(self, client: Any, model: str):
+        self.client = client
+        self.model = model
+
+    def _accepts(self, name: str) -> bool:
+        """Return True when the installed SDK's messages.create accepts ``name``."""
+
+        try:
+            params = inspect.signature(self.client.messages.create).parameters
+        except (TypeError, ValueError):
+            return False
+        return name in params
+
+    def call_tool(
+        self,
+        *,
+        system: str,
+        messages: list[dict[str, Any]],
+        tool: dict[str, Any],
+        temperature: float,
+        max_tokens: int = 1024,
+    ) -> ToolResult:
+        """Force one tool_use block and return its raw input."""
+
+        kwargs: dict[str, Any] = {
+            "model": self.model,
+            "max_tokens": max_tokens,
+            "system": system,
+            "messages": messages,
+            "tools": [tool],
+            "tool_choice": {"type": "tool", "name": tool["name"]},
+        }
+        if self._accepts("temperature"):
+            kwargs["temperature"] = temperature
+        response = self.client.messages.create(**kwargs)
+        input_tokens, output_tokens = _usage(response)
+        return ToolResult(_response_raw(response), input_tokens, output_tokens)
+
+    def list_models(self) -> list[str]:
+        """List model IDs visible to the Anthropic key."""
+
+        response = self.client.models.list()
+        data = getattr(response, "data", None)
+        if data is None and isinstance(response, dict):
+            data = response.get("data", [])
+        ids = [str(model.get("id") if isinstance(model, dict) else getattr(model, "id", "")) for model in data or []]
+        return [model_id for model_id in ids if model_id]
 
 
-def _response_input(response: Any) -> dict[str, Any]:
-    """Extract and decode the first forced tool-use block."""
+def _model_client(settings: Settings, anthropic_client: Any | None, llm_client: Any | None) -> Any:
+    """Return an object with ``call_tool``, built only when a real call is requested."""
+
+    if llm_client is not None:
+        return llm_client
+    if anthropic_client is not None:
+        return AnthropicToolCaller(anthropic_client, settings.anthropic_model)
+    if settings.llm_provider == "anthropic":
+        if anthropic is None:
+            raise LLMError("anthropic package is not installed")
+        return AnthropicToolCaller(anthropic.Anthropic(api_key=settings.anthropic_api_key), settings.anthropic_model)
+    if not settings.bharatcode_api_key:
+        raise LLMError("BHARATCODE_API_KEY is not set; get one at https://bharatcode.ai/account")
+    return BharatCodeClient(
+        settings.bharatcode_api_key,
+        model=settings.bharatcode_model,
+        base_url=settings.bharatcode_base_url,
+        reasoning_effort=settings.bharatcode_reasoning_effort,
+    )
+
+
+def _response_raw(response: Any) -> Any:
+    """Read the first forced tool-use block's input from an Anthropic response."""
 
     content = getattr(response, "content", None)
     if not content:
@@ -152,6 +216,12 @@ def _response_input(response: Any) -> dict[str, Any]:
         raw = block.get("input")
     if raw is None:
         raise ValueError("response content has no tool input")
+    return raw
+
+
+def _decode_input(raw: Any) -> dict[str, Any]:
+    """Decode tool arguments that may arrive as a JSON string or an object."""
+
     if isinstance(raw, str):
         raw = json.loads(raw)
     if not isinstance(raw, dict):
@@ -173,20 +243,23 @@ def _log_call(
     *,
     operation: str,
     model: str,
-    response: Any | None,
+    result: ToolResult | None,
     elapsed_ms: int,
     error: str | None = None,
 ) -> None:
     """Append one usage/timing event for every attempted model call."""
 
-    input_tokens, output_tokens = _usage(response) if response is not None else (0, 0)
     data: dict[str, Any] = {
         "operation": operation,
         "model": model,
-        "input_tokens": input_tokens,
-        "output_tokens": output_tokens,
+        "input_tokens": result.input_tokens if result else 0,
+        "output_tokens": result.output_tokens if result else 0,
         "ms": elapsed_ms,
     }
+    if result is not None and result.request_id:
+        data["request_id"] = result.request_id
+    if result is not None and result.via != "tool_call":
+        data["via"] = result.via
     if error:
         data["error"] = error
     store.append_event("llm.call", data)
@@ -270,50 +343,29 @@ def _validate_entities(payload: dict[str, Any]) -> Entities:
     return Entities(**values)
 
 
-def _sdk_accepts(client: Any, name: str) -> bool:
-    """Return True when the installed SDK's messages.create accepts ``name``."""
-
-    try:
-        params = inspect.signature(client.messages.create).parameters
-    except (TypeError, ValueError):
-        return False
-    return name in params
-
-
 def _create_tool_call(
     client: Any,
     *,
-    settings: Settings,
     operation: str,
     system: str,
     messages: list[dict[str, Any]],
     tool: dict[str, Any],
     temperature: float,
     store: Store,
-) -> Any:
-    """Make one forced-tool call and write its usage event."""
+) -> dict[str, Any]:
+    """Make one forced-tool call, write its usage event, and decode its input."""
 
+    model = str(getattr(client, "model", ""))
     started = time.perf_counter()
-    response: Any | None = None
-    kwargs: dict[str, Any] = {
-        "model": settings.anthropic_model,
-        "max_tokens": 1024,
-        "system": system,
-        "messages": messages,
-        "tools": [tool],
-        "tool_choice": {"type": "tool", "name": tool["name"]},
-    }
-    if _sdk_accepts(client, "temperature"):
-        kwargs["temperature"] = temperature
     try:
-        response = client.messages.create(**kwargs)
+        result = client.call_tool(system=system, messages=messages, tool=tool, temperature=temperature)
     except Exception as exc:
         elapsed_ms = int((time.perf_counter() - started) * 1000)
-        _log_call(store, operation=operation, model=settings.anthropic_model, response=None, elapsed_ms=elapsed_ms, error=str(exc))
+        _log_call(store, operation=operation, model=model, result=None, elapsed_ms=elapsed_ms, error=str(exc))
         raise
     elapsed_ms = int((time.perf_counter() - started) * 1000)
-    _log_call(store, operation=operation, model=settings.anthropic_model, response=response, elapsed_ms=elapsed_ms)
-    return response
+    _log_call(store, operation=operation, model=model, result=result, elapsed_ms=elapsed_ms)
+    return _decode_input(result.raw_input)
 
 
 def draft(
@@ -322,10 +374,11 @@ def draft(
     diff: DiffContext | None = None,
     *,
     anthropic_client: Any | None = None,
+    llm_client: Any | None = None,
     store: Store | None = None,
     settings: Settings | None = None,
 ) -> list[Sentence]:
-    """Draft 3–6 bounded sentences through a forced Anthropic tool call."""
+    """Draft 3–6 bounded sentences through one forced model tool call."""
 
     title, body, context = _note_parts(note, note_body, diff)
     active_settings = _settings(settings)
@@ -355,7 +408,7 @@ def draft(
             "content": f"Note title: {title}\nNote body:\n{body}\n\nDiff context:\n{_diff_material(context)}",
         }
     ]
-    client = _anthropic_client(active_settings, anthropic_client)
+    client = _model_client(active_settings, anthropic_client, llm_client)
     last_error = ""
     last_exception: Exception | None = None
     for attempt in range(2):
@@ -376,9 +429,8 @@ def draft(
                 }
             )
         try:
-            response = _create_tool_call(
+            payload = _create_tool_call(
                 client,
-                settings=active_settings,
                 operation="draft",
                 system=system,
                 messages=messages,
@@ -386,7 +438,7 @@ def draft(
                 temperature=0.3,
                 store=active_store,
             )
-            sentences = _validate_draft(_response_input(response))
+            sentences = _validate_draft(payload)
             active_store.append_event("draft.generated", {"sentences": len(sentences), "characters": sum(len(item.text) for item in sentences)})
             return sentences
         except DraftTooLongError as exc:
@@ -421,6 +473,7 @@ def extract_entities(
     changed_paths: list[str] | None = None,
     *,
     anthropic_client: Any | None = None,
+    llm_client: Any | None = None,
     store: Store | None = None,
     settings: Settings | None = None,
 ) -> Entities:
@@ -436,7 +489,7 @@ def extract_entities(
         "or exactly equal a path segment from the changed paths. Plain lowercase English words such as "
         "github, webhook, or server are never symbols; return them as integrations only when they name "
         "one of the allowed products, otherwise omit them. Integrations must be single product names: "
-        "GitHub, Slack, Notion, Anthropic, SQLite, FastAPI, or Caddy. "
+        "GitHub, Slack, Notion, BharatCode, Anthropic, SQLite, FastAPI, or Caddy. "
         "The changed paths are hints for spelling only; do not add an entity that is not in the sentence."
     )
     messages = [
@@ -445,7 +498,7 @@ def extract_entities(
             "content": f"Sentence: {current.text}\nChanged paths for spelling hints: {json.dumps(paths)}",
         }
     ]
-    client = _anthropic_client(active_settings, anthropic_client)
+    client = _model_client(active_settings, anthropic_client, llm_client)
     last_error = ""
     for attempt in range(2):
         if attempt:
@@ -456,9 +509,8 @@ def extract_entities(
                 }
             )
         try:
-            response = _create_tool_call(
+            payload = _create_tool_call(
                 client,
-                settings=active_settings,
                 operation="extract_entities",
                 system=system,
                 messages=messages,
@@ -466,7 +518,7 @@ def extract_entities(
                 temperature=0.0,
                 store=active_store,
             )
-            entities = _validate_entities(_response_input(response))
+            entities = _validate_entities(payload)
             active_store.append_event(
                 "entities.extracted",
                 {"sentence_idx": current.idx, "files": len(entities.files), "symbols": len(entities.symbols), "integrations": len(entities.integrations)},
@@ -479,16 +531,19 @@ def extract_entities(
     raise LLMError("entity extraction failed")
 
 
-def list_models(*, anthropic_client: Any | None = None, settings: Settings | None = None) -> list[str]:
-    """List model IDs for the CLI fallback when a configured model is unavailable."""
+def list_models(
+    *,
+    anthropic_client: Any | None = None,
+    llm_client: Any | None = None,
+    settings: Settings | None = None,
+) -> list[str]:
+    """List model IDs for the configured provider."""
 
     active_settings = _settings(settings)
-    client = _anthropic_client(active_settings, anthropic_client)
-    response = client.models.list()
-    data = getattr(response, "data", None)
-    if data is None and isinstance(response, dict):
-        data = response.get("data", [])
-    ids: list[str] = []
-    for model in data or []:
-        ids.append(str(model.get("id") if isinstance(model, dict) else getattr(model, "id", "")))
-    return [model_id for model_id in ids if model_id]
+    if llm_client is None and anthropic_client is None and active_settings.llm_provider == "bharatcode":
+        client = BharatCodeClient(active_settings.bharatcode_api_key, base_url=active_settings.bharatcode_base_url)
+        try:
+            return client.list_models()
+        finally:
+            client.close()
+    return _model_client(active_settings, anthropic_client, llm_client).list_models()
