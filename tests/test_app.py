@@ -6,6 +6,7 @@ import hashlib
 import asyncio
 import hmac
 import json
+import time
 from urllib.parse import urlencode
 
 import httpx
@@ -44,9 +45,10 @@ def signed_github(body: bytes, secret: str) -> str:
     return "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
 
 
-def signed_slack(body: bytes, secret: str, timestamp: str = "1700000000") -> str:
+def signed_slack(body: bytes, secret: str, timestamp: str | None = None) -> str:
     """Return Slack's v0 signature format for the fallback verifier test."""
 
+    timestamp = timestamp or str(int(time.time()))
     base = f"v0:{timestamp}:".encode() + body
     return "v0=" + hmac.new(secret.encode(), base, hashlib.sha256).hexdigest()
 
@@ -131,7 +133,7 @@ def test_slack_interaction_acknowledges_valid_signature(tmp_path):
     application = create_app(settings=settings, store=store, push_handler=noop_push_handler)
     payload = json.dumps({"type": "block_actions", "actions": []})
     body = f"payload={payload}".encode()
-    timestamp = "1700000000"
+    timestamp = str(int(time.time()))
     response = asyncio.run(
         request(
             application,
@@ -162,7 +164,7 @@ def test_post_on_x_interaction_is_logged_and_not_dispatched(tmp_path):
     application = create_app(settings=settings, store=store, approval_handler=approval_handler)
     payload = json.dumps({"type": "block_actions", "actions": [{"action_id": "post_on_x"}]})
     body = urlencode({"payload": payload}).encode()
-    timestamp = "1700000000"
+    timestamp = str(int(time.time()))
     response = asyncio.run(
         request(
             application,

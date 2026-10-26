@@ -24,3 +24,6 @@ eval/cache/
 .DS_Store
 .idea/
 .vscode/
+
+# hackathon working notes (rules copies, share drafts)
+drafts/
