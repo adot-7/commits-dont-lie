@@ -1,3 +1,7 @@
+> **This is the reliability brief as submitted on 14 Sep 2026** (Multi-App AI Agent Hackathon,
+> Anthropic provider). For what changed since, including the BharatCode provider and the local
+> CLI, see [`docs/WHAT_CHANGED.md`](docs/WHAT_CHANGED.md).
+
 # What it does
 
 Every file, function, or integration a sentence names must appear in the diff — or the sentence doesn't ship. `SUPPORTED` carries receipts, `UNSUPPORTED` blocks the post, and `UNVERIFIABLE` names nothing checkable. The deterministic `claim_vs_diff` function runs at the pre-publish gate and again in the post-publish monitor.
