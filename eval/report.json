@@ -1,0 +1,282 @@
+{
+  "labels": [
+    "SUPPORTED",
+    "UNSUPPORTED",
+    "UNVERIFIABLE"
+  ],
+  "total": 30,
+  "correct": 28,
+  "accuracy": 0.933,
+  "confusion_matrix": {
+    "SUPPORTED": {
+      "SUPPORTED": 9,
+      "UNSUPPORTED": 0,
+      "UNVERIFIABLE": 0
+    },
+    "UNSUPPORTED": {
+      "SUPPORTED": 1,
+      "UNSUPPORTED": 11,
+      "UNVERIFIABLE": 0
+    },
+    "UNVERIFIABLE": {
+      "SUPPORTED": 1,
+      "UNSUPPORTED": 0,
+      "UNVERIFIABLE": 8
+    }
+  },
+  "per_class": {
+    "SUPPORTED": {
+      "precision": 0.818,
+      "recall": 1.0
+    },
+    "UNSUPPORTED": {
+      "precision": 1.0,
+      "recall": 0.917
+    },
+    "UNVERIFIABLE": {
+      "precision": 1.0,
+      "recall": 0.889
+    }
+  },
+  "provider": "bharatcode",
+  "model": "qwen-3.8-27b",
+  "misses": [
+    {
+      "id": "ba052d0-UNV",
+      "expected": "UNVERIFIABLE",
+      "got": "SUPPORTED",
+      "reason": "Every named file, function, and integration appears in the diff."
+    },
+    {
+      "id": "38dee1b-ADV-decoy-integration",
+      "expected": "UNSUPPORTED",
+      "got": "SUPPORTED",
+      "reason": "Every named file, function, and integration appears in the diff."
+    }
+  ],
+  "cases": [
+    {
+      "id": "23a2ef7-SUP",
+      "expected": "SUPPORTED",
+      "got": "SUPPORTED",
+      "reason": "Every named file, function, and integration appears in the diff."
+    },
+    {
+      "id": "23a2ef7-UNS",
+      "expected": "UNSUPPORTED",
+      "got": "UNSUPPORTED",
+      "reason": "'cdl/monitor.py' does not appear in the 5 files changed in a62f5db..23a2ef7."
+    },
+    {
+      "id": "23a2ef7-UNV",
+      "expected": "UNVERIFIABLE",
+      "got": "UNVERIFIABLE",
+      "reason": "Names no file, function, or integration that can be checked against the diff."
+    },
+    {
+      "id": "cccc9db-SUP",
+      "expected": "SUPPORTED",
+      "got": "SUPPORTED",
+      "reason": "Every named file, function, and integration appears in the diff."
+    },
+    {
+      "id": "cccc9db-UNS",
+      "expected": "UNSUPPORTED",
+      "got": "UNSUPPORTED",
+      "reason": "'cdl/notion_client.py' does not appear in the 4 files changed in 23a2ef7..cccc9db."
+    },
+    {
+      "id": "cccc9db-UNV",
+      "expected": "UNVERIFIABLE",
+      "got": "UNVERIFIABLE",
+      "reason": "Names no file, function, or integration that can be checked against the diff."
+    },
+    {
+      "id": "ba052d0-SUP",
+      "expected": "SUPPORTED",
+      "got": "SUPPORTED",
+      "reason": "Every named file, function, and integration appears in the diff."
+    },
+    {
+      "id": "ba052d0-UNS",
+      "expected": "UNSUPPORTED",
+      "got": "UNSUPPORTED",
+      "reason": "'cdl/slack_client.py' does not appear in the 3 files changed in cccc9db..ba052d0."
+    },
+    {
+      "id": "ba052d0-UNV",
+      "expected": "UNVERIFIABLE",
+      "got": "SUPPORTED",
+      "reason": "Every named file, function, and integration appears in the diff."
+    },
+    {
+      "id": "18fab5f-SUP",
+      "expected": "SUPPORTED",
+      "got": "SUPPORTED",
+      "reason": "Every named file, function, and integration appears in the diff."
+    },
+    {
+      "id": "18fab5f-UNS",
+      "expected": "UNSUPPORTED",
+      "got": "UNSUPPORTED",
+      "reason": "'tests/test_check.py' does not appear in the 1 files changed in ba052d0..18fab5f."
+    },
+    {
+      "id": "18fab5f-UNV",
+      "expected": "UNVERIFIABLE",
+      "got": "UNVERIFIABLE",
+      "reason": "Names no file, function, or integration that can be checked against the diff."
+    },
+    {
+      "id": "34da131-SUP",
+      "expected": "SUPPORTED",
+      "got": "SUPPORTED",
+      "reason": "Every named file, function, and integration appears in the diff."
+    },
+    {
+      "id": "34da131-UNS",
+      "expected": "UNSUPPORTED",
+      "got": "UNSUPPORTED",
+      "reason": "'cdl/monitor.py' does not appear in the 2 files changed in 919a5c7..34da131."
+    },
+    {
+      "id": "34da131-UNV",
+      "expected": "UNVERIFIABLE",
+      "got": "UNVERIFIABLE",
+      "reason": "Names no file, function, or integration that can be checked against the diff."
+    },
+    {
+      "id": "5f04acf-SUP",
+      "expected": "SUPPORTED",
+      "got": "SUPPORTED",
+      "reason": "Every named file, function, and integration appears in the diff."
+    },
+    {
+      "id": "5f04acf-UNS",
+      "expected": "UNSUPPORTED",
+      "got": "UNSUPPORTED",
+      "reason": "'cdl/pipeline.py' does not appear in the 2 files changed in e0edf16..5f04acf."
+    },
+    {
+      "id": "5f04acf-UNV",
+      "expected": "UNVERIFIABLE",
+      "got": "UNVERIFIABLE",
+      "reason": "Names no file, function, or integration that can be checked against the diff."
+    },
+    {
+      "id": "38dee1b-SUP",
+      "expected": "SUPPORTED",
+      "got": "SUPPORTED",
+      "reason": "Every named file, function, and integration appears in the diff."
+    },
+    {
+      "id": "38dee1b-UNS",
+      "expected": "UNSUPPORTED",
+      "got": "UNSUPPORTED",
+      "reason": "'cdl/llm.py' does not appear in the 9 files changed in 5f04acf..38dee1b."
+    },
+    {
+      "id": "38dee1b-UNV",
+      "expected": "UNVERIFIABLE",
+      "got": "UNVERIFIABLE",
+      "reason": "Names no file, function, or integration that can be checked against the diff."
+    },
+    {
+      "id": "a809efd-SUP",
+      "expected": "SUPPORTED",
+      "got": "SUPPORTED",
+      "reason": "Every named file, function, and integration appears in the diff."
+    },
+    {
+      "id": "a809efd-UNS",
+      "expected": "UNSUPPORTED",
+      "got": "UNSUPPORTED",
+      "reason": "'cdl/pipeline.py' does not appear in the 1 files changed in d622768..a809efd."
+    },
+    {
+      "id": "a809efd-UNV",
+      "expected": "UNVERIFIABLE",
+      "got": "UNVERIFIABLE",
+      "reason": "Names no file, function, or integration that can be checked against the diff."
+    },
+    {
+      "id": "5f04acf-ADV-realfile-wrongrange",
+      "expected": "UNSUPPORTED",
+      "got": "UNSUPPORTED",
+      "reason": "'cdl/drafter.py' does not appear in the 2 files changed in e0edf16..5f04acf."
+    },
+    {
+      "id": "ba052d0-ADV-nearmiss",
+      "expected": "UNSUPPORTED",
+      "got": "UNSUPPORTED",
+      "reason": "'cdl/notion.py' does not appear in the 3 files changed in cccc9db..ba052d0."
+    },
+    {
+      "id": "23a2ef7-ADV-multiword-integration",
+      "expected": "SUPPORTED",
+      "got": "SUPPORTED",
+      "reason": "Every named file, function, and integration appears in the diff."
+    },
+    {
+      "id": "18fab5f-ADV-two-entities-one-missing",
+      "expected": "UNSUPPORTED",
+      "got": "UNSUPPORTED",
+      "reason": "'cdl/slack_client.py' does not appear in the 1 files changed in ba052d0..18fab5f."
+    },
+    {
+      "id": "38dee1b-ADV-decoy-integration",
+      "expected": "UNSUPPORTED",
+      "got": "SUPPORTED",
+      "reason": "Every named file, function, and integration appears in the diff."
+    },
+    {
+      "id": "cccc9db-ADV-voice",
+      "expected": "UNVERIFIABLE",
+      "got": "UNVERIFIABLE",
+      "reason": "Names no file, function, or integration that can be checked against the diff."
+    }
+  ],
+  "staleness": {
+    "total": 5,
+    "correct": 5,
+    "accuracy": 1.0,
+    "cases": [
+      {
+        "id": "renamed-symbol-stale",
+        "expected_stale": true,
+        "got_stale": true,
+        "reason": "active_github was removed in d622768 (cdl/pipeline.py)",
+        "note": "The live pipeline fix removed the obsolete active_github call-site symbol."
+      },
+      {
+        "id": "body-edit-keeps-symbol",
+        "expected_stale": false,
+        "got_stale": false,
+        "reason": "All stored evidence still holds in the diff.",
+        "note": "Slack update_message changed its body and signature but kept the symbol."
+      },
+      {
+        "id": "unrelated-commit",
+        "expected_stale": false,
+        "got_stale": false,
+        "reason": "All stored evidence still holds in the diff.",
+        "note": "The Slack preservation commit does not remove the grounding checker."
+      },
+      {
+        "id": "symbol-moved-file",
+        "expected_stale": false,
+        "got_stale": false,
+        "reason": "All stored evidence still holds in the diff.",
+        "note": "The webhook work references handle_push from the pipeline while the app receipt remains non-removed."
+      },
+      {
+        "id": "integration-receipt-kept",
+        "expected_stale": false,
+        "got_stale": false,
+        "reason": "All stored evidence still holds in the diff.",
+        "note": "The Slack-only receipt changes while cdl/slack_client.py remains present."
+      }
+    ],
+    "misses": []
+  }
+}
