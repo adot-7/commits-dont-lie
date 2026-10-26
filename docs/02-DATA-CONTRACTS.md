@@ -177,5 +177,5 @@ System prompt states the rule verbatim and instructs: *name the concrete file, f
 integration whenever you can — unverifiable sentences will be rejected.*
 **extract_entities** → JSON `{"files": [...], "symbols": [...], "integrations": [...]}` for one
 sentence, given the sentence and the list of changed paths (for path spelling only — the
-substring rule still applies). Use Anthropic `tool_use` with a JSON schema for both to avoid
-prose wrappers.
+substring rule still applies). Use a forced tool call with a JSON schema for both (BharatCode
+function tool or Anthropic `tool_use`) to avoid prose wrappers.

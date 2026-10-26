@@ -1,7 +1,8 @@
 # 03 — Integrations: exact calls
 
 Use `httpx.Client(timeout=20)` for GitHub and Notion. Use `slack_sdk.WebClient` for Slack.
-Use `anthropic.Anthropic()` for the LLM. Every call logs an `events` row (`docs/02 §6`).
+Use raw `httpx` to BharatCode for the LLM (default), or `anthropic.Anthropic()` when
+`LLM_PROVIDER=anthropic`. Every call logs an `events` row (`docs/02 §6`).
 
 Why raw HTTPS for Notion: the API split databases into *data sources* in version `2025-09-03`
 and SDK support for that version varies; two `httpx` calls are fewer unknowns than an SDK
@@ -78,7 +79,22 @@ App: `docs/07 §7`. Bot token `xoxb-…` (`SLACK_BOT_TOKEN`), signing secret
 - Interactivity Request URL: `https://commitsdontlie.akashparashar.dev/slack/interactions`
   (set after `docs/07 §4` is live; Slack does not verify this URL on save).
 
-## 4. Anthropic
+## 4a. BharatCode (default, added Oct 2026)
+Source: https://bharatcode.ai/build, saved 2026-10-26. OpenAI-compatible.
+- Base URL `https://bharatcode.ai/api/model/v1` (`BHARATCODE_BASE_URL`); `Authorization: Bearer
+  $BHARATCODE_API_KEY`. `GET /models` is public and lists `qwen-3.8-27b` (students, Lite, Pro;
+  tool calling, reasoning, 32,000 max output tokens) and `deepseek-v4.1-flash` (Pro only).
+- `POST /chat/completions` with `messages=[{"role":"system",...}, ...]`,
+  `tools=[{"type":"function","function":{"name","description","parameters"}}]`,
+  `tool_choice={"type":"function","function":{"name": ...}}`, `temperature`, `max_tokens`,
+  `reasoning_effort` (`BHARATCODE_REASONING_EFFORT`, default `none`). Read
+  `choices[0].message.tool_calls[0].function.arguments` (a JSON string). Log `usage`
+  (`prompt_tokens`, `completion_tokens`) and the `x-request-id` response header.
+- `finish_reason: "length"` means the budget (reasoning included) ran out, even with HTTP 200.
+  Never use that partial tool call; retry once with double `max_tokens` (cap 32,000), then fail.
+- 503 = busy, retry after a few seconds. Unsupported features return 400.
+
+## 4b. Anthropic (optional, `LLM_PROVIDER=anthropic`)
 `ANTHROPIC_API_KEY`; model from `ANTHROPIC_MODEL`, default `claude-sonnet-5`. If the API returns
 `not_found` for the model id, run `python -m cdl models` (calls `client.models.list()`), pick the
 newest Sonnet, set the env var. Use `client.messages.create(model, max_tokens=1024, system=...,
@@ -100,7 +116,10 @@ NOTION_POSTS_DS_ID=
 SLACK_BOT_TOKEN=
 SLACK_SIGNING_SECRET=
 SLACK_CHANNEL_ID=
-ANTHROPIC_API_KEY=
+LLM_PROVIDER=bharatcode
+BHARATCODE_API_KEY=
+BHARATCODE_MODEL=qwen-3.8-27b
+ANTHROPIC_API_KEY=          # only with LLM_PROVIDER=anthropic
 ANTHROPIC_MODEL=claude-sonnet-5
 DATABASE_PATH=data/cdl.sqlite
 ```

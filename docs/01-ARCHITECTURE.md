@@ -96,7 +96,7 @@ Browser ──▶ /  /posts/{id}  /eval  /healthz      (Jinja, reads SQLite only
 | Repo changed between draft and approve | mid-check → `Stale` before send (never sends stale text) |
 
 ## LLM usage (two calls per draft, zero per verdict)
-- Model: `ANTHROPIC_MODEL` env, default `claude-sonnet-5` (override if unavailable —
-  see `docs/03 §4`). `max_tokens` 1024. Temperature 0.3 for draft, 0 for extraction.
+- Model: BharatCode `qwen-3.8-27b` by default (`BHARATCODE_MODEL`, `docs/03 §4a`), or
+  `ANTHROPIC_MODEL` with `LLM_PROVIDER=anthropic` (`docs/03 §4b`). `max_tokens` 1024. Temperature 0.3 for draft, 0 for extraction.
 - Cost estimate: ~6–10k input tokens per draft (patches truncated to 4k chars/file, 20 files),
   ~600 output. ≈ $0.05–0.10 per draft. Whole night incl. tests: < $3.

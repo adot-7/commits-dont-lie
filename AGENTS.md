@@ -1,9 +1,14 @@
 # AGENTS.md — Commits Don't Lie
 
-You are a coding agent building **Commits Don't Lie** (CDL) for the Multi-App AI Agent
-Hackathon (Lemma × Comma Capital, Sun 13 Sep 2026). Hard deadline: **04:30 IST / 16:00 PT**.
-Solo human operator: Akash (`adot-7`). You write the code; he runs ops (tokens, DNS, Slack app,
-Notion pages) and approves posts.
+You are a coding agent working on **Commits Don't Lie** (CDL). It was built for the Multi-App
+AI Agent Hackathon (Lemma × Comma Capital, 13 Sep 2026; that version is branch
+`lemma-hackathon`) and is now entered in **BharatCode Build League Round 1** (deadline
+**10 Nov 2026, 11:59 PM IST**). Solo human operator: Akash (`adot-7`). You write the code; he
+runs ops (tokens, DNS, Slack app, Notion pages) and approves posts.
+
+**Build League rules that bind the code** (saved copy in `drafts/rules/`, 26 Oct 2026):
+`BharatCode.txt` stays in the repo root; it must work with the BharatCode API (default
+provider, `docs/03 §4a`); no secrets, tokens or private data in the public repo.
 
 ## Read order (do not skip)
 1. `docs/00-CONTEXT.md` — what we are building and why; the pitch; scope fences.
@@ -28,7 +33,7 @@ is the spec; the issue is the work item. If they disagree, the doc wins — fix 
    file/symbol/integration string that is not a case-insensitive substring of the sentence text.
    This stops the model from inventing entities that happen to be in the diff.
 4. **No secrets in git.** `.env` is gitignored; `.env.example` lists every variable. The repo is
-   public. Run `git diff --cached | grep -iE 'xoxb|ntn_|secret_|sk-ant|ghp_|github_pat'` before
+   public. Run `git diff --cached | grep -iE 'xoxb|ntn_|secret_|sk-ant|ghp_|github_pat|bc_live_'` before
    every commit; abort on a hit.
 5. **Commit messages are demo content.** CDL is dogfooded on this repo tonight; your commit
    messages and diffs are the raw material for the posts in the video. Write small, honest,
@@ -41,7 +46,7 @@ is the spec; the issue is the work item. If they disagree, the doc wins — fix 
    post-ack work, `httpx` sync client, SQLite. 1 GB RAM VM. No Celery, no Redis, no Docker.
 8. **Timebox.** Each issue has a timebox in `docs/06`. When it expires, ship what works, open a
    follow-up issue, move on. The cut order in `docs/06 §4` is binding.
-9. **Stack:** Python 3.12, FastAPI, uvicorn, httpx, `slack_sdk`, `anthropic`, Jinja2, sqlite3
+9. **Stack:** Python 3.12, FastAPI, uvicorn, httpx (also for BharatCode), `slack_sdk`, `anthropic` (optional provider), Jinja2, sqlite3
    (stdlib), pytest. Raw HTTPS for GitHub and Notion (no SDK — see `docs/03` for why).
 10. **Direct to `main`.** Solo repo, no PR ceremony. Reference the issue in the commit
     (`… (#12)`), close it when the acceptance criteria in the issue are met.
