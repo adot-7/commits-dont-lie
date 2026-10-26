@@ -125,11 +125,17 @@ def _json(value: Any) -> str:
     return json.dumps(dataclass_dict(value), ensure_ascii=False, sort_keys=True)
 
 
+_STDOUT = object()
+
+
 class Store:
     """Small SQLite repository used by request and background tasks."""
 
-    def __init__(self, path: str | Path | None = None):
+    def __init__(self, path: str | Path | None = None, *, echo: Any = _STDOUT):
+        """Open the database; ``echo`` is the stream for event lines (None keeps them in SQLite only)."""
+
         self.path = _path(path)
+        self.echo = echo
         connection = init_db(self.path)
         connection.close()
 
@@ -156,7 +162,9 @@ class Store:
             "data": data if data is not None else {},
         }
         line = json.dumps(event, ensure_ascii=False, sort_keys=True)
-        print(line, file=sys.stdout, flush=True)
+        stream = sys.stdout if self.echo is _STDOUT else self.echo
+        if stream is not None:
+            print(line, file=stream, flush=True)
         connection = self._connect()
         try:
             cursor = connection.execute(

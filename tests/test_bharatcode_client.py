@@ -165,3 +165,16 @@ def test_unknown_provider_fails_loudly(monkeypatch, tmp_path):
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     with pytest.raises(ConfigError, match="LLM_PROVIDER"):
         load_settings(strict=False, dotenv_path=tmp_path / "missing.env")
+
+
+def test_missing_tool_call_is_retryable_value_error():
+    client, _ = mock_client([(200, completion(None, content="I cannot help", finish_reason="stop"))])
+    with pytest.raises(ValueError, match="no extract_entities tool call"):
+        client.call_tool(system="s", messages=[], tool=ENTITIES_TOOL, temperature=0.0)
+
+
+def test_auth_failure_is_not_resent(tmp_path):
+    client, seen = mock_client([(401, {"error": "bad key"}), (401, {"error": "bad key"})])
+    with pytest.raises(Exception, match="BharatCode call failed: HTTP 401"):
+        extract_entities(Sentence(0, "x", "both"), [], llm_client=client, store=Store(tmp_path / "db.sqlite"), settings=settings(tmp_path))
+    assert len(seen) == 1

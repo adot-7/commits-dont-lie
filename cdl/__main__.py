@@ -51,6 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
         local.add_argument("--repo", default=".", help="path to the git repository (default: current directory)")
         local.add_argument("--json", action="store_true", help="print a machine-readable report")
         local.add_argument("--db", help="event log path (default: <repo>/.git/cdl/events.sqlite)")
+        local.add_argument("-v", "--verbose", action="store_true", help="echo every logged event to stderr")
     return parser
 
 
@@ -59,6 +60,7 @@ def _local_command(args: argparse.Namespace) -> int:
 
     from .config import PROVIDER_KEY_VARS, load_settings
     from .local_check import as_json, check_sentences, draft_and_check, render, split_sentences
+    from .llm import LLMError
     from .local_git import LocalGit, LocalGitError
     from .store import Store
 
@@ -79,7 +81,7 @@ def _local_command(args: argparse.Namespace) -> int:
     except LocalGitError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
-    store = Store(db_path)
+    store = Store(db_path, echo=sys.stderr if args.verbose else None)
     if args.command == "check":
         if args.file:
             text = sys.stdin.read() if args.file == "-" else open(args.file, encoding="utf-8").read()
@@ -94,9 +96,14 @@ def _local_command(args: argparse.Namespace) -> int:
         if not sentences:
             print("error: the post is empty", file=sys.stderr)
             return 2
-        result = check_sentences(sentences, diff, settings=settings, store=store)
-    else:
-        result = draft_and_check(args.note, diff, settings=settings, store=store)
+    try:
+        if args.command == "check":
+            result = check_sentences(sentences, diff, settings=settings, store=store)
+        else:
+            result = draft_and_check(args.note, diff, settings=settings, store=store)
+    except LLMError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     if args.json:
         print(json.dumps(as_json(result, diff), indent=2, ensure_ascii=False))
     else:

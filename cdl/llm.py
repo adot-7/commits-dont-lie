@@ -18,7 +18,7 @@ try:
 except ImportError:  # pragma: no cover - dependency is listed in requirements
     anthropic = None
 
-from .bharatcode_client import BharatCodeClient, ToolResult
+from .bharatcode_client import BharatCodeClient, BharatCodeError, ToolResult
 from .config import Settings, get_settings
 from .models import DiffContext, Entities, Note, Sentence
 from .store import Store
@@ -460,6 +460,9 @@ def draft(
                 )
                 return truncated
             continue
+        except BharatCodeError as exc:
+            # Auth, quota and exhausted-budget failures are not fixed by resending the same call.
+            raise LLMError(f"BharatCode call failed: {exc}") from exc
         except Exception as exc:
             last_error = str(exc)
             last_exception = exc
@@ -524,6 +527,8 @@ def extract_entities(
                 {"sentence_idx": current.idx, "files": len(entities.files), "symbols": len(entities.symbols), "integrations": len(entities.integrations)},
             )
             return entities
+        except BharatCodeError as exc:
+            raise LLMError(f"BharatCode call failed: {exc}") from exc
         except Exception as exc:
             last_error = str(exc)
             if attempt == 1:

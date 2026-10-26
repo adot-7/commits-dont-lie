@@ -22,7 +22,10 @@ BUSY_STATUSES = {429, 503}
 
 
 class BharatCodeError(RuntimeError):
-    """Raised when BharatCode refuses a call or returns no usable tool input."""
+    """Raised when BharatCode refuses a call or the output budget runs out.
+
+    Malformed tool output raises ``ValueError`` instead, so callers can retry it.
+    """
 
 
 @dataclass
@@ -146,7 +149,7 @@ class BharatCodeClient:
             body, request_id = self._post(payload)
             choices = body.get("choices") or []
             if not choices:
-                raise BharatCodeError(f"response has no choices request_id={request_id or '-'}")
+                raise ValueError(f"response has no choices request_id={request_id or '-'}")
             choice = choices[0]
             usage = body.get("usage") or {}
             input_tokens = int(usage.get("prompt_tokens", 0) or 0)
@@ -164,7 +167,7 @@ class BharatCodeClient:
             fallback = _content_json(message.get("content"))
             if fallback is not None:
                 return ToolResult(fallback, input_tokens, output_tokens, request_id, via="content_json")
-            raise BharatCodeError(f"response has no {tool['name']} tool call request_id={request_id or '-'}")
+            raise ValueError(f"response has no {tool['name']} tool call request_id={request_id or '-'}")
         raise BharatCodeError("tool call failed")
 
     def list_models(self) -> list[str]:
