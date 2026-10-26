@@ -73,9 +73,14 @@ def match_file(entity: str, diff: DiffContext) -> list[Evidence]:
 
 
 def _symbol_pattern(entity: str) -> re.Pattern[str]:
-    """Compile the case-sensitive word-boundary pattern for a symbol."""
+    """Compile the case-sensitive word-boundary pattern for a symbol.
 
-    return re.compile(r"\b" + re.escape(entity) + r"\b")
+    A trailing call suffix such as ``compare()`` is matched as ``compare``: no
+    word boundary can follow ``)``, so the literal form could never match.
+    """
+
+    name = entity[:-2] if entity.endswith("()") else entity
+    return re.compile(r"\b" + re.escape(name) + r"\b")
 
 
 def match_symbol(entity: str, diff: DiffContext) -> list[Evidence]:

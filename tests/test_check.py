@@ -256,3 +256,12 @@ def test_grounding_imports_only_stdlib_and_models():
     tree = ast.parse(Path("cdl/grounding/check.py").read_text())
     imports = [node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)]
     assert imports == ["__future__", "models"]
+
+
+def test_symbol_with_call_parens_matches_its_definition():
+    verdict = claim_vs_diff(
+        claim("compare() now parses hunks", Entities(symbols=["compare()"])),
+        mk_diff(file("cdl/github_client.py", added=[(143, "    def compare(self, base, head):")])),
+    )
+    assert verdict.status == "SUPPORTED"
+    assert verdict.evidence[0].line_no == 143
