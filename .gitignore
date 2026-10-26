@@ -27,3 +27,5 @@ eval/cache/
 
 # hackathon working notes (rules copies, share drafts)
 drafts/
+build/
+dist/

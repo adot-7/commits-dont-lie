@@ -35,7 +35,72 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument("base")
     compare.add_argument("head")
     subparsers.add_parser("resync", help="retry failed external mirrors")
+    for name, help_text in (
+        ("check", "check a post against a local commit range; exit 1 if any claim is unsupported"),
+        ("draft", "draft a post from a local commit range and check every sentence"),
+    ):
+        local = subparsers.add_parser(name, help=help_text)
+        if name == "check":
+            local.add_argument("text", nargs="?", help="post text; use -f FILE or pipe it on stdin instead")
+            local.add_argument("-f", "--file", help="read the post from a file ('-' for stdin)")
+        else:
+            local.add_argument("--note", default="", help="what you meant to say; the draft keeps your phrasing where the diff supports it")
+        local.add_argument("-n", "--commits", type=int, default=None, help="check against the last N commits (default 1)")
+        local.add_argument("-r", "--range", dest="range_spec", help="commit range such as main..HEAD or v1.0..v1.1")
+        local.add_argument("--repo", default=".", help="path to the git repository (default: current directory)")
+        local.add_argument("--json", action="store_true", help="print a machine-readable report")
+        local.add_argument("--db", help="event log path (default: <repo>/.git/cdl/events.sqlite)")
     return parser
+
+
+def _local_command(args: argparse.Namespace) -> int:
+    """Run ``check`` or ``draft`` against a local repository with only a model key."""
+
+    from .config import PROVIDER_KEY_VARS, load_settings
+    from .local_check import as_json, check_sentences, draft_and_check, render, split_sentences
+    from .local_git import LocalGit, LocalGitError
+    from .store import Store
+
+    settings = load_settings(strict=False)
+    key_var = PROVIDER_KEY_VARS[settings.llm_provider]
+    key = settings.bharatcode_api_key if settings.llm_provider == "bharatcode" else settings.anthropic_api_key
+    if not key:
+        print(f"error: {key_var} is not set. Get a key at https://bharatcode.ai/account and export it.", file=sys.stderr)
+        return 2
+    git = LocalGit(args.repo)
+    try:
+        if args.range_spec:
+            base, head = git.parse_range(args.range_spec)
+        else:
+            base, head = git.last_n(args.commits or 1)
+        diff = git.compare(base, head)
+        db_path = args.db or str(git.git_dir() / "cdl" / "events.sqlite")
+    except LocalGitError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    store = Store(db_path)
+    if args.command == "check":
+        if args.file:
+            text = sys.stdin.read() if args.file == "-" else open(args.file, encoding="utf-8").read()
+        elif args.text:
+            text = args.text
+        elif not sys.stdin.isatty():
+            text = sys.stdin.read()
+        else:
+            print("error: pass the post text, -f FILE, or pipe it on stdin", file=sys.stderr)
+            return 2
+        sentences = split_sentences(text)
+        if not sentences:
+            print("error: the post is empty", file=sys.stderr)
+            return 2
+        result = check_sentences(sentences, diff, settings=settings, store=store)
+    else:
+        result = draft_and_check(args.note, diff, settings=settings, store=store)
+    if args.json:
+        print(json.dumps(as_json(result, diff), indent=2, ensure_ascii=False))
+    else:
+        print(render(result, diff))
+    return 0 if result.passed else 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -45,6 +110,8 @@ def main(argv: list[str] | None = None) -> int:
     if not args.command:
         build_parser().print_help()
         return 0
+    if args.command in {"check", "draft"}:
+        return _local_command(args)
     if args.command == "serve":
         import uvicorn
 
