@@ -89,7 +89,8 @@ def render(result: CheckResult, diff: DiffContext) -> str:
     """Render a terminal report with one receipt line per sentence."""
 
     lines = [
-        f"{diff.repo} {diff.base_sha[:7]}..{diff.head_sha[:7]} · {len(diff.commits)} commits · {len(diff.files)} files",
+        f"{diff.repo} {diff.base_sha[:7]}..{diff.head_sha[:7]} · "
+        f"{len(diff.commits)} commit{'s' * (len(diff.commits) != 1)} · {len(diff.files)} file{'s' * (len(diff.files) != 1)}",
         "",
     ]
     lines.extend(evidence_line(sentence, verdict) for sentence, verdict in zip(result.sentences, result.verdicts))
